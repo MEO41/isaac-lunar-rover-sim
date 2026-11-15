@@ -1,0 +1,49 @@
+# CLAUDE.md — isaac-lunar-rover-sim
+
+Lunar rover simulator for Isaac Sim 6.0.1: LROC NAC DEM terrain with collision, procedural sub-DEM craters and
+fractal relief, rocks, regolith and wheel tracks. The design is `docs/DESIGN.md`; deviations made while building are
+recorded in `docs/decision_log.md`.
+
+## Scope (user instruction)
+
+Build and prove the **simulation environment** first. The learning-facing layer (gymnasium wrapper, episode recorder,
+tasks, language instructions, Isaac Lab adapter) is deferred until the user confirms the environment works. Keep the
+cheap seams: named seeds, semantic labels on prims, crater/rock registry and scene manifest, track ground truth.
+
+## Architecture rule
+
+- `lunar_rover_sim.core` is Isaac-free (stdlib, numpy, scipy, pydantic, pyyaml, Pillow). It does all generation maths.
+  `tests/unit/test_import_rules.py` enforces it.
+- `lunar_rover_sim.runtime` is a thin Isaac layer: arrays -> USD/PhysX, stepping, reading sensors.
+- Baked scenes are `.npy/.npz/.png/.json` only (the Isaac env has no rasterio).
+
+## Storage (user instruction)
+
+Code lives here. Every generated file goes under the data root on DISK02
+(default `/media/noron/DISK02/isaac-lunar-rover-sim-data`, override with `LUNAR_ROVER_SIM_DATA_ROOT` or `--data-root`).
+DISK02 is auto-mounted at login and not in fstab: entry points call `require_data_root()` and refuse to fall back to
+the root disk (which is ~97 % full). DEM files are referenced read-only from `lunar_regolith/data/nac_dem`, never copied.
+
+## Commands
+
+```bash
+scripts/setup_data_root.sh                     # once: create the data root on DISK02
+scripts/run_unit_tests.sh                      # Isaac-free unit tests (uses $ISAAC_ENV python)
+$ISAAC_ENV/bin/python scripts/bake_scene.py --preset smoke      # bake a scene (no Isaac)
+scripts/isaac_run.sh tests/isaac/smoke_terrain_drive.py --preset smoke   # headless Isaac smoke test
+scripts/isaac_run.sh --interactive scripts/view_scene.py --preset smoke  # drive with the keyboard
+```
+
+## Conventions
+
+1. Fully descriptive names, no cryptic abbreviations (`configuration`, not `cfg`; `random_generator`, not `rng`).
+   Allowed: `id`, `usd`, `dem`, `rgb`, `png`, `json`, `xyzw`, unit suffixes `_m`, `_s`, `_deg`, `_rad`, `_n`, `_pa`, `_kg`.
+2. A docstring on every function, method and class (purpose, units, return shape).
+3. Honest labelling: synthetic or uncalibrated data is marked SYNTHETIC / ASSUMPTION in code, metadata and docs.
+4. Type hints on public signatures; pydantic models use `extra="forbid"`.
+5. Every print in an Isaac script uses `flush=True`.
+6. No silent clamping: functions that clamp to a grid raise or return a validity mask.
+7. Report only tests that were actually run, with the numbers.
+8. Git: `origin` = https://github.com/MEO41/isaac-lunar-rover-sim (branch `main`). Commit or push only when the
+   user asks. Never commit `.env.local`, DEM data or anything from the data root.
+9. One Isaac process at a time (8 GB GPU); always launch through `scripts/isaac_run.sh`.

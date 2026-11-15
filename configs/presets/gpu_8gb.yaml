@@ -1,0 +1,2 @@
+# Default preset for the RTX 5060 (8 GB): see docs/DESIGN.md section 6.3. Defaults already hold these values.
+launch: {required_free_video_memory_mib: 6000}

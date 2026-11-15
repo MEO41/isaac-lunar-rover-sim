@@ -1,0 +1,2 @@
+# Procedural 55 kg four-wheel skid-steer rover; defaults.yaml holds the full specification.
+rover: {name: skid_steer_four_wheel}

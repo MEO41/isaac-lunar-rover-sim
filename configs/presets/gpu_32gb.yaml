@@ -1,0 +1,15 @@
+# RTX 5090 (32 GB) preset. Data only: extrapolated, NOT run on this machine.
+launch: {required_free_video_memory_mib: 20000}
+terrain:
+  workspace_size_m: 76.8
+  near_ring: {size_m: 408.0, spacing_m: 0.2, skirt_m: 12.8}
+  regional: {enabled: true, size_m: 2048.0, spacing_m: 2.0, skirt_m: 128.0}
+  backdrop: {enabled: true, size_m: 38400.0, spacing_m: 32.0}
+rocks:
+  pebble_minimum_diameter_m: 0.015
+  prototypes_per_shape_class: 12
+regolith:
+  macro_albedo_size_px: 4096
+render:
+  camera_resolution_px: [1280, 720]
+  subframes_per_camera_frame: 4

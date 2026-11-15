@@ -1,0 +1,7 @@
+# Apollo 17 landing site, Taurus-Littrow valley floor. Origin = lunar module touchdown point.
+site:
+  name: apollo17_landing_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO17_2M.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO17.TIF
+  origin_longitude_deg: 30.7717
+  origin_latitude_deg: 20.1908

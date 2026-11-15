@@ -1,0 +1,27 @@
+# Small, fast preset for smoke tests and the keyboard window on the 8 GB card.
+launch: {required_free_video_memory_mib: 2500}
+terrain:
+  workspace_size_m: 12.8
+  visual_spacing_m: 0.05
+  collision_decimation: 2
+  visual_tile_cells: 128
+  collision_tile_cells: 64
+  workspace_skirt_m: 1.6
+  drivable_margin_m: 3.2
+  near_ring: {size_m: 52.0, spacing_m: 0.2, skirt_m: 6.4}
+  regional: {enabled: true, size_m: 512.0, spacing_m: 2.0, skirt_m: 64.0}
+  backdrop: {enabled: false, size_m: 38400.0, spacing_m: 64.0}
+  craters: {feature_crater_diameter_range_m: [2.0, 3.0]}   # the 6.4 m drivable zone cannot hold a 4-7 m crater
+rocks:
+  pebble_minimum_diameter_m: 0.05
+  prototypes_per_shape_class: 2
+regolith:
+  macro_albedo_size_px: 512
+  detail_texture_coarse: {size_px: 1024, tile_size_m: 4.0}
+  detail_texture_fine: {size_px: 512, tile_size_m: 0.73}
+rover:
+  cameras:
+    rear: {enabled: false, position_body_m: [-0.30, 0.0, 0.75], pitch_down_deg: 15.0, yaw_deg: 180.0, horizontal_field_of_view_deg: 90.0}
+render:
+  camera_resolution_px: [320, 240]
+  subframes_per_camera_frame: 1

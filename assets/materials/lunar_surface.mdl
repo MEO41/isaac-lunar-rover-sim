@@ -1,0 +1,131 @@
+mdl 1.6;
+
+// Lunar surface materials for the lunar rover simulator (Isaac Sim 6 RTX).
+// Adapted from apollo_lander_modeling/materials/lunar_regolith.mdl (verified there against the Moon's phase curve):
+// rough Oren-Nayar diffuse plus a back-scattering glossy lobe (opposition surge). Not a Hapke model.
+//
+// Texture coordinate 0 ("st") is authored in WORLD METRES (east, north) on every terrain mesh, so textures continue
+// across tiles and tiers without seams. All texture inputs are optional (guarded by tex::texture_isvalid).
+//   albedo_texture         macro albedo (sRGB) covering [albedo_origin_m, albedo_origin_m + albedo_size_m]
+//   detail_*_texture       tiling micro-relief (linear, mean 0.5): albedo variation + bump; two incommensurate octaves
+//   track_mask_texture     wheel-track mask (raw): R = tread compaction, G = shoulder disturbance
+// Albedo inputs are NORMAL albedo; the tint is divided by normal_albedo_gain (measured in the sibling project).
+// Track shading magnitudes are ASSUMPTIONS (docs/assumptions.md).
+
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+
+float2 world_to_unit(float2 st, float2 origin_m, float size_m, bool flip_north)
+{
+    float2 uv = (st - origin_m) / size_m;
+    return flip_north ? float2(uv.x, 1.0 - uv.y) : uv;
+}
+
+float3 detail_bump_normal(uniform texture_2d detail_texture, float tile_m, uniform float strength)
+{
+    return base::file_bump_texture(
+        texture: detail_texture,
+        factor: strength,
+        uvw: base::transform_coordinate(
+            transform: base::rotation_translation_scale(scaling: float3(1.0 / tile_m, 1.0 / tile_m, 1.0)),
+            coordinate: base::coordinate_source(coordinate_system: base::texture_coordinate_uvw, texture_space: 0)));
+}
+
+export material lunar_surface(
+    uniform texture_2d albedo_texture = texture_2d() [[ anno::display_name("Macro albedo texture (sRGB)") ]],
+    float2 albedo_origin_m = float2(0.0),
+    float albedo_size_m = 1.0,
+    bool albedo_flip_north = false,
+    color albedo_constant = color(0.11),
+    uniform texture_2d detail_coarse_texture = texture_2d(),
+    float detail_coarse_tile_m = 4.0,
+    uniform texture_2d detail_fine_texture = texture_2d(),
+    float detail_fine_tile_m = 0.73,
+    float detail_albedo_strength = 0.3,
+    uniform float detail_bump_strength = 1.0,
+    float backscatter_weight = 0.1,
+    float backscatter_roughness = 1.0,
+    float normal_albedo_gain = 1.275,
+    uniform texture_2d track_mask_texture = texture_2d() [[ anno::display_name("Wheel-track mask (raw)") ]],
+    float2 track_mask_origin_m = float2(0.0),
+    float track_mask_size_m = 1.0,
+    bool track_mask_flip_north = false,
+    float track_albedo_factor = 0.9,
+    float tread_bump_reduction = 0.7
+)
+= let {
+    float3 uvw = state::texture_coordinate(0);
+    float2 st = float2(uvw.x, uvw.y);
+
+    color macro_albedo = tex::texture_isvalid(albedo_texture)
+        ? tex::lookup_color(albedo_texture, world_to_unit(st, albedo_origin_m, albedo_size_m, albedo_flip_north),
+                            tex::wrap_clamp, tex::wrap_clamp)
+        : albedo_constant;
+    float coarse_value = tex::texture_isvalid(detail_coarse_texture)
+        ? tex::lookup_float(detail_coarse_texture, st / detail_coarse_tile_m, tex::wrap_repeat, tex::wrap_repeat) : 0.5;
+    float fine_value = tex::texture_isvalid(detail_fine_texture)
+        ? tex::lookup_float(detail_fine_texture, st / detail_fine_tile_m, tex::wrap_repeat, tex::wrap_repeat) : 0.5;
+    float detail_value = 0.5 + 0.7 * (coarse_value - 0.5) + 0.5 * (fine_value - 0.5);
+
+    float4 mask = tex::texture_isvalid(track_mask_texture)
+        ? tex::lookup_float4(track_mask_texture,
+                             world_to_unit(st, track_mask_origin_m, track_mask_size_m, track_mask_flip_north),
+                             tex::wrap_clamp, tex::wrap_clamp)
+        : float4(0.0);
+    float tread = math::saturate(mask.x);
+    float shoulder = math::saturate(mask.y);
+    float track_factor = (1.0 - 0.03 * tread) * (1.0 - (1.0 - track_albedo_factor) * shoulder);
+
+    color albedo = math::clamp(macro_albedo * (1.0 + 2.0 * detail_albedo_strength * (detail_value - 0.5)) * track_factor
+                               / normal_albedo_gain, color(0.0), color(1.0));
+
+    float3 geometric_normal = state::normal();
+    float3 coarse_normal = tex::texture_isvalid(detail_coarse_texture)
+        ? detail_bump_normal(detail_coarse_texture, detail_coarse_tile_m, detail_bump_strength) : geometric_normal;
+    float3 fine_normal = tex::texture_isvalid(detail_fine_texture)
+        ? detail_bump_normal(detail_fine_texture, detail_fine_tile_m, detail_bump_strength * 0.6) : geometric_normal;
+    float3 bumped_normal = math::normalize(coarse_normal + fine_normal - geometric_normal);
+    float3 shading_normal = math::normalize(math::lerp(bumped_normal, geometric_normal, tread_bump_reduction * tread));
+} in material(
+    surface: material_surface(scattering: df::normalized_mix(
+        components: df::bsdf_component[](
+            df::bsdf_component(weight: 1.0 - backscatter_weight,
+                               component: df::diffuse_reflection_bsdf(tint: albedo, roughness: 1.0)),
+            df::bsdf_component(weight: backscatter_weight,
+                               component: df::backscattering_glossy_reflection_bsdf(roughness_u: backscatter_roughness,
+                                                                                     tint: albedo))))),
+    geometry: material_geometry(normal: shading_normal)
+);
+
+export material lunar_rock(
+    color albedo_constant = color(0.15),
+    uniform texture_2d detail_texture = texture_2d(),
+    float detail_tile_m = 0.5,
+    float detail_albedo_strength = 0.35,
+    uniform float detail_bump_strength = 1.5,
+    float backscatter_weight = 0.08,
+    float backscatter_roughness = 1.0,
+    float normal_albedo_gain = 1.275
+)
+= let {
+    float3 uvw = state::texture_coordinate(0);
+    float detail_value = tex::texture_isvalid(detail_texture)
+        ? tex::lookup_float(detail_texture, float2(uvw.x, uvw.y) / detail_tile_m, tex::wrap_repeat, tex::wrap_repeat) : 0.5;
+    color albedo = math::clamp(albedo_constant * (1.0 + 2.0 * detail_albedo_strength * (detail_value - 0.5))
+                               / normal_albedo_gain, color(0.0), color(1.0));
+    float3 shading_normal = tex::texture_isvalid(detail_texture)
+        ? detail_bump_normal(detail_texture, detail_tile_m, detail_bump_strength) : state::normal();
+} in material(
+    surface: material_surface(scattering: df::normalized_mix(
+        components: df::bsdf_component[](
+            df::bsdf_component(weight: 1.0 - backscatter_weight,
+                               component: df::diffuse_reflection_bsdf(tint: albedo, roughness: 1.0)),
+            df::bsdf_component(weight: backscatter_weight,
+                               component: df::backscattering_glossy_reflection_bsdf(roughness_u: backscatter_roughness,
+                                                                                     tint: albedo))))),
+    geometry: material_geometry(normal: shading_normal)
+);

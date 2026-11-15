@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lunar-rover-sim"
+version = "0.1.0"
+description = "Lunar rover simulator for Isaac Sim 6: LROC NAC DEM terrain, procedural sub-DEM detail, rocks, regolith and wheel tracks"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pydantic>=2.5", "pyyaml>=6.0", "pillow>=10"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+addopts = "-q"
+markers = [
+    "needs_dem: needs the real LROC NAC DTM files referenced by NAC_DEM_DIRECTORY",
+]

@@ -1,0 +1,3 @@
+# Default scene: Apollo 17 valley floor around the lunar module.
+scene_seed: 7
+profile: {site: apollo17_landing_site, rover: skid_steer_four_wheel}

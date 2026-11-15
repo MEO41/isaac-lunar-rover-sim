@@ -1,0 +1,251 @@
+# Every configuration field with its default. Merge order (later wins):
+#   defaults <- sites/<profile.site> <- scenes/<scene> <- rovers/<profile.rover> <- presets/<preset> <- command line
+# Values marked ASSUMPTION are modelling choices without a firm source (see docs/assumptions.md).
+# Everything under regolith, all sub-DEM terrain detail and all rocks are SYNTHETIC.
+generator_version: "0.1.0"
+scene_seed: 7
+
+profile:
+  site: apollo17_landing_site
+  rover: skid_steer_four_wheel
+  preset: gpu_8gb
+
+storage:
+  data_root: /media/noron/DISK02/isaac-lunar-rover-sim-data
+  allow_root_disk: false
+  minimum_free_gib: 20.0
+
+launch:
+  required_free_video_memory_mib: 6000
+
+site:
+  name: apollo17_landing_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO17_2M.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO17.TIF
+  origin_longitude_deg: 30.7717
+  origin_latitude_deg: 20.1908
+  origin_offset_east_m: 0.0
+  origin_offset_north_m: 0.0
+  standard_parallel_deg: 20.0
+  central_longitude_deg: 180.0
+  body_radius_m: 1737400.0
+  dem_cutoff_wavelength_m: 8.0            # ASSUMPTION: shortest wavelength the 2 m DTM resolves (~4 posts)
+
+terrain:
+  workspace_size_m: 38.4
+  visual_spacing_m: 0.025
+  collision_decimation: 2                 # collision lattice = visual lattice[::2, ::2]
+  visual_tile_cells: 128
+  collision_tile_cells: 256
+  workspace_skirt_m: 3.2
+  drivable_margin_m: 3.2
+  apply_planetary_curvature: true
+  near_ring: {size_m: 208.0, spacing_m: 0.2, skirt_m: 12.8}
+  regional: {enabled: true, size_m: 2048.0, spacing_m: 4.0, skirt_m: 128.0}
+  backdrop: {enabled: true, size_m: 38400.0, spacing_m: 64.0}
+  craters:
+    equilibrium_coefficient: 0.05                 # N(>D) = c * D^-2 per m^2
+    randomize_equilibrium_coefficient: true
+    equilibrium_coefficient_range: [0.034, 0.079] # Minton 2019 .. Trask 1966
+    minimum_diameter_m: 0.4                       # raised automatically to 8 collision posts
+    near_ring_minimum_diameter_m: 1.0
+    taper_start_diameter_m: 4.0
+    fresh_depth_to_diameter_range: [0.12, 0.20]   # ASSUMPTION (visibility choice; Stopar 2017 gives <= 0.12 below 100 m)
+    rim_height_to_diameter: 0.036
+    apron_extent_radii: 3.0
+    degradation_parameter_maximum: 0.17           # u = K t / R^2, uniform in [0, max]
+    fresh_degradation_threshold: 0.03
+    moderate_degradation_threshold: 0.10
+    ellipticity_minimum: 0.85
+    rim_harmonic_amplitude_maximum: 0.06
+    feature_crater_count: 1
+    feature_crater_diameter_range_m: [4.0, 7.0]
+  fractal:
+    hurst_exponent: 0.9
+    structure_function_anchor_source: measured_from_dem   # measured_from_dem | configured
+    structure_function_anchor_m: 0.20
+    structure_function_anchor_lag_m: 4.0
+    structure_function_anchor_valid_range_m: [0.10, 0.40]
+    roughness_multiplier: 1.0
+    randomize_roughness_multiplier: true
+    roughness_multiplier_range: [1.0, 1.4]        # ASSUMPTION
+    macro_band_wavelengths_m: [0.8, 8.0]          # upper edge replaced by dem_cutoff_wavelength_m
+    meso_band_wavelengths_m: [0.2, 0.8]           # lower edge raised automatically to 4 collision posts
+    band_edge_relative_width: 0.3
+    minimum_fractal_gain: 0.3
+    maximum_fractal_gain: 1.5
+
+rocks:
+  pivot_diameter_m: 0.1
+  background_density_at_pivot_per_m2: 0.18        # ASSUMPTION (Surveyor-range fits)
+  randomize_background_density: true
+  background_density_at_pivot_range_per_m2: [0.15, 0.30]
+  background_exponent: 2.3
+  randomize_background_exponent: true
+  background_exponent_range: [2.1, 2.6]
+  background_fade_diameters_m: [0.5, 1.0]
+  pebble_minimum_diameter_m: 0.02
+  cobble_minimum_diameter_m: 0.05
+  registration_minimum_diameter_m: 0.10
+  maximum_diameter_m: 3.0
+  boulder_rock_abundance: 0.004                   # Diviner global mean areal fraction of rocks >= 1 m
+  boulder_exponent: 3.0
+  near_ring_minimum_diameter_m: 0.3
+  clustering_field_correlation_length_m: 15.0
+  clustering_field_sigma: 0.8
+  thomas_cluster_fraction: 0.3
+  thomas_parent_density_per_m2: 0.02
+  thomas_child_sigma_m: 1.5
+  burial_fraction_range: [0.1, 0.5]
+  tilt_sigma_deg: 10.0
+  maximum_slope_for_large_rocks_deg: 30.0
+  overlap_rejection_factor: 0.4
+  prototypes_per_shape_class: 6
+  fillet_minimum_diameter_m: 0.2
+  fillet_height_fraction_range: [0.05, 0.15]
+  albedo_values: {dark: 0.10, medium: 0.15, bright: 0.20}
+  keep_out_zones: [{center_east_m: 0.0, center_north_m: 0.0, radius_m: 1.5}]
+
+regolith:                                         # SYNTHETIC
+  property_map_spacing_m: 0.5
+  correlation_length_m: 20.0
+  facies_fractions: {firm: 0.35, loose: 0.45, soft: 0.20}
+  friction_angle_range_deg: [30.0, 42.0]
+  cohesion_range_pa: [100.0, 1000.0]
+  bulk_density_range_kg_m3: [1400.0, 1850.0]
+  fresh_crater_compaction_factor: 0.6             # ASSUMPTION
+  soil_contrast_limit: [0.25, 4.0]
+  interface_friction_ratio: 0.92
+  interface_friction_clip: [0.2, 1.3]
+  dynamic_to_static_friction_ratio: 0.875
+  friction_zone_count: 8
+  base_normal_albedo: 0.11
+  randomize_base_normal_albedo: true
+  base_normal_albedo_range: [0.07, 0.16]
+  albedo_mottling_amplitude: 0.08
+  fresh_ejecta_brightening: 0.15
+  macro_albedo_size_px: 2048
+  detail_texture_coarse: {size_px: 2048, tile_size_m: 4.0}
+  detail_texture_fine: {size_px: 1024, tile_size_m: 0.73}
+  detail_hurst_exponent: 0.7
+  detail_texture_standard_deviation: 0.18         # ASSUMPTION
+
+sinkage:                                          # runtime only
+  exponent: 1.0
+  slip_gain: 2.0                                  # ASSUMPTION
+  multipass_gains: [1.0, 1.25, 1.35, 1.4]         # ASSUMPTION
+  visual_floor_m: 0.004                           # non-physical: keeps tracks visible on firm soil
+  maximum_m: 0.03
+  force_filter_time_constant_s: 0.1
+
+tracks:
+  enabled: true
+  visual_mode: geometry_and_mask                  # geometry_and_mask | geometry_only | mask_only
+  author_normals: true
+  sample_spacing_m: 0.0125
+  contact_force_threshold_n: 0.5
+  contact_gap_threshold_m: 0.015
+  flank_repose_angle_deg: 40.0
+  berm_volume_fraction: 0.3                       # ASSUMPTION
+  berm_width_wheel_fraction: 0.5
+  pass_separation_time_s: 1.0
+  mask_upload_minimum_interval_s: 0.1
+  track_albedo_factor: 0.90                       # ASSUMPTION
+  tread_bump_reduction: 0.7                       # ASSUMPTION
+
+rover:
+  name: skid_steer_four_wheel
+  chassis_size_m: [0.80, 0.34, 0.20]
+  chassis_mass_kg: 42.0
+  front_axle_mass_kg: 3.0
+  wheel_mass_kg: 2.5
+  wheel_radius_m: 0.15
+  wheel_width_m: 0.12
+  wheelbase_m: 0.70
+  track_width_m: 0.72
+  ground_clearance_m: 0.22
+  wheel_collider_capsule_height_m: 0.04
+  grouser_count: 6
+  grouser_height_m: 0.008
+  nominal_sinkage_m: 0.008
+  front_axle_pivot_enabled: true
+  front_axle_pivot_limit_deg: 15.0
+  front_axle_pivot_damping_n_m_s_per_rad: 2.0
+  wheel_drive_damping_n_m_s_per_deg: 1000.0
+  wheel_drive_maximum_torque_n_m: 20.0
+  maximum_forward_speed_m_s: 0.6
+  maximum_yaw_rate_rad_s: 0.8
+  maximum_forward_acceleration_m_s2: 1.0
+  maximum_yaw_acceleration_rad_s2: 2.0
+  skid_steer_track_width_factor: 2.5      # feed-forward: skid steering reaches ~1/4 of the open-loop yaw rate
+  maximum_wheel_rim_speed_m_s: 1.2
+  yaw_rate_proportional_gain: 1.5         # closed-loop yaw rate (measured yaw rate tracks the twist command)
+  yaw_rate_integral_gain: 4.0
+  yaw_rate_integral_limit_rad_s: 2.0
+  cameras:
+    front: {enabled: true, position_body_m: [0.30, 0.0, 0.75], pitch_down_deg: 15.0, yaw_deg: 0.0, horizontal_field_of_view_deg: 90.0}
+    rear: {enabled: true, position_body_m: [-0.30, 0.0, 0.75], pitch_down_deg: 15.0, yaw_deg: 180.0, horizontal_field_of_view_deg: 90.0}
+    follow: {enabled: false, position_body_m: [-2.5, 0.0, 1.5], pitch_down_deg: 20.0, yaw_deg: 0.0, horizontal_field_of_view_deg: 70.0}
+
+physics:
+  gravity_m_s2: 1.62
+  physics_rate_hz: 120
+  solver_type: TGS
+  gpu_dynamics_enabled: false
+  broadphase_type: MBP
+  articulation_position_iterations: 16
+  articulation_velocity_iterations: 4
+  wheel_friction: 1.0
+  rock_friction_static: 0.6
+  rock_friction_dynamic: 0.5
+
+spawn:
+  preferred_east_m: 0.0
+  preferred_north_m: 0.0
+  heading_deg: 0.0
+  search_radius_m: 4.0
+  maximum_slope_deg: 8.0
+  maximum_roughness_m: 0.03
+  crater_minimum_diameter_m: 1.0          # the rover centre stays outside the rim + clearance of craters this large
+  crater_clearance_m: 0.25
+  footprint_radius_m: 0.7
+
+drive:
+  control_rate_hz: 10
+  settle_physics_steps: 120
+  collider_wait_timeout_s: 60.0
+  boundary_policy: stop_outward
+  fall_through_depth_m: 0.5
+  fall_through_policy: abort
+
+lighting:
+  sun_azimuth_deg: 90.0
+  sun_elevation_deg: 15.0
+  sun_angular_diameter_deg: 0.53
+  sun_color: [1.0, 0.98, 0.95]
+  sun_base_intensity: 6000.0
+  exposure_scale: 1.0
+
+render:
+  renderer: RealTimePathTracing
+  camera_resolution_px: [640, 480]
+  anti_aliasing_mode: 4
+  subframes_per_camera_frame: 2
+  warmup_subframes_after_reset: 8
+  camera_near_clip_m: 0.05
+  camera_far_clip_m: 100000.0
+  camera_horizontal_aperture_mm: 20.955
+  sun_glare:                              # camera bloom + lens flare (RTX post-process), applies to every camera
+    enabled: true
+    scale: 0.6                            # bloom brightness; 0.15-0.6 compared in docs/images/sun_glare_check.png
+    cutoff: 1000.0                        # HDR cutoff: only the Sun (~1e5) blooms; at 2-50 the sunlit terrain bloomed too (haze)
+    cutoff_fuzziness: 0.5
+    aperture_blades: 6                    # star with 12 points
+    f_stop: 5.6
+    spectral_samples: 0                   # > 0 adds spectral diffraction; it tints the whole frame, so off
+
+window:
+  viewport_resolution_px: [1280, 720]
+  onboard_cameras_enabled: false
+  keyboard_forward_speed_m_s: 0.4
+  keyboard_yaw_rate_rad_s: 0.6
