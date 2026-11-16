@@ -19,10 +19,14 @@ cheap seams: named seeds, semantic labels on prims, crater/rock registry and sce
 
 ## Storage (user instruction)
 
-Code lives here. Every generated file goes under the data root on DISK02
-(default `/media/noron/DISK02/isaac-lunar-rover-sim-data`, override with `LUNAR_ROVER_SIM_DATA_ROOT` or `--data-root`).
-DISK02 is auto-mounted at login and not in fstab: entry points call `require_data_root()` and refuse to fall back to
-the root disk (which is ~97 % full). DEM files are referenced read-only from `lunar_regolith/data/nac_dem`, never copied.
+Code lives here. Every generated file goes under the data root, set per machine in `.env.local`
+(`LUNAR_ROVER_SIM_DATA_ROOT`, or `--data-root`). Entry points call `require_data_root()`, which refuses the root disk
+unless the machine opts in with `LUNAR_ROVER_SIM_ALLOW_ROOT_DISK=1`. Machines (2026-11-16):
+- **minsky** (RTX 5090, current workstation): one 1.9 TB disk, opt-in set; data root `~/Desktop/MEO/isaac-lunar-rover-sim-data`
+  next to the repos.
+- old machine (RTX 5060): data root `/media/noron/DISK02/isaac-lunar-rover-sim-data` (DISK02 is auto-mounted at login
+  and not in fstab; the root disk is ~97 % full, so no opt-in there).
+DEM files are referenced read-only from `lunar_regolith/data/nac_dem`, never copied.
 
 ## lunar_regolith appearance (user instruction)
 
@@ -40,7 +44,7 @@ the root disk (which is ~97 % full). DEM files are referenced read-only from `lu
 ## Commands
 
 ```bash
-scripts/setup_data_root.sh                     # once: create the data root on DISK02
+scripts/setup_data_root.sh                     # once: create the data root (path from .env.local)
 scripts/run_unit_tests.sh                      # Isaac-free unit tests (uses $ISAAC_ENV python)
 $ISAAC_ENV/bin/python scripts/bake_scene.py --preset smoke      # bake a scene (no Isaac)
 scripts/isaac_run.sh tests/isaac/smoke_terrain_drive.py --preset smoke   # headless Isaac smoke test

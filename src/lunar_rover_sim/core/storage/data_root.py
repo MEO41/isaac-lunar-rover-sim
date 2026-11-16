@@ -114,10 +114,22 @@ def check_data_root(path: Path, allow_root_disk: bool = False, minimum_free_gib:
         raise DataRootError(f"Data root {path} has only {free_gib:.1f} GiB free (< {minimum_free_gib} GiB required).")
 
 
+ALLOW_ROOT_DISK_ENVIRONMENT_VARIABLE = "LUNAR_ROVER_SIM_ALLOW_ROOT_DISK"
+
+
+def root_disk_allowed_on_this_machine() -> bool:
+    """True when this machine opts in to a data root on the root disk (LUNAR_ROVER_SIM_ALLOW_ROOT_DISK=1 in the
+    environment or .env.local), for machines whose root disk is their only, large disk. Default: refuse."""
+    return environment_value(ALLOW_ROOT_DISK_ENVIRONMENT_VARIABLE) == "1"
+
+
 def require_data_root(command_line_path: str | None = None, configured_path: str | None = None,
                       allow_root_disk: bool = False, minimum_free_gib: float = 20.0) -> DataRoot:
-    """Resolve and check the data root, create its standard subdirectories, and return it. Raises DataRootError."""
+    """Resolve and check the data root, create its standard subdirectories, and return it. Raises DataRootError.
+
+    The root disk is accepted when ``allow_root_disk`` (configuration) or the machine opt-in is set."""
     path = resolve_data_root(command_line_path, configured_path)
+    allow_root_disk = allow_root_disk or root_disk_allowed_on_this_machine()
     check_data_root(path, allow_root_disk=allow_root_disk, minimum_free_gib=minimum_free_gib)
     for subdirectory in SUBDIRECTORIES:
         (path / subdirectory).mkdir(parents=True, exist_ok=True)
