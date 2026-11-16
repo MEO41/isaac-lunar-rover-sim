@@ -413,6 +413,63 @@ class AppearanceConfiguration(StrictModel):
     tag: str
 
 
+class ExpertConfiguration(StrictModel):
+    """Privileged scripted driver (runtime only): fast-marching route on a cost map + dynamic window approach.
+
+    The design follows the MARE GNC planner (github.com/raulcastar/GNC-Moon-Simulator, component_path_planner): slope
+    cost table from DyMu, impassable slope threshold, route clearance with fallback, DWA that refuses footprint
+    collisions, final approach and stall re-planning. Privileged: obstacles come from the scene's rock and crater
+    tables, not from a sensor. Footprint sizes are derived from the rover configuration."""
+
+    planner_spacing_m: float
+    slope_baseline_m: float
+    slope_threshold_deg: float
+    slope_cost_breakpoints_deg: list[float]
+    slope_cost_values: list[float]
+    slope_cost_maximum: float
+    rock_obstacle_height_m: float
+    crater_obstacle_minimum_diameter_m: float
+    route_side_clearance_m: float
+    preferred_clearance_m: float
+    goal_snap_radius_m: float
+    start_release_radius_m: float
+    maximum_forward_speed_m_s: float
+    maximum_forward_acceleration_m_s2: float
+    maximum_yaw_rate_rad_s: float
+    maximum_yaw_acceleration_rad_s2: float
+    speed_resolution_m_s: float
+    yaw_rate_resolution_rad_s: float
+    prediction_horizon_s: float
+    prediction_step_s: float
+    heading_cost_gain: float
+    speed_cost_gain: float
+    obstacle_safety_m: float
+    lookahead_m: float
+    braking_distance_m: float
+    approach_minimum_speed_m_s: float
+    approach_aligned_heading_deg: float
+    stop_tolerance_m: float
+    maximum_tilt_deg: float
+    stall_window_s: float
+    stall_minimum_motion_m: float
+    stall_minimum_turn_deg: float
+    maximum_stalls: int
+    replan_deviation_m: float
+
+
+class GroundTruthConfiguration(StrictModel):
+    """Per-pixel object and shadow masks by GPU ray casting against the rendered geometry (runtime only).
+
+    Class ids and colours follow MARE's mask_classes.json (github.com/raulcastar/Unreal-Moon-Terrain-Generation)."""
+
+    crater_rim_width_fraction: float
+    crater_minimum_diameter_m: float
+    boulder_minimum_diameter_m: float
+    sun_glare_radius_deg: float
+    shadow_ray_offset_m: float
+    device: str
+
+
 class SimulatorConfiguration(StrictModel):
     """The whole resolved configuration."""
 
@@ -435,3 +492,5 @@ class SimulatorConfiguration(StrictModel):
     render: RenderConfiguration
     window: WindowConfiguration
     appearance: AppearanceConfiguration
+    expert: ExpertConfiguration
+    ground_truth: GroundTruthConfiguration

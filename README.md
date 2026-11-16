@@ -75,6 +75,17 @@ How it is wired:
   the soil maps, plus a track mask that changes albedo and smoothness. Ruts are visual; the collider is not deformed.
 - **Rover**: procedural 55 kg four-wheel skid-steer with a passive front-axle pivot, closed-loop yaw rate, cameras,
   lunar gravity, camera glare (bloom) for the Sun.
+- **Scripted expert** (privileged demonstrator, planner design after
+  [MARE](https://github.com/raulcastar/GNC-Moon-Simulator)'s GNC stack): fast-marching route on a slope cost map with
+  rocks taller than 0.10 m and large crater bowls impassable, a dynamic-window local planner that refuses footprint
+  collisions, stall re-planning and tilt abort. Isaac-free (`core/planning/`).
+- **Ground-truth masks** (classes and ids of [MARE](https://github.com/raulcastar/Unreal-Moon-Terrain-Generation)):
+  object mask (sky, sun, sun_glare, rover, terrain, crater, crater_rim, wheel_track, boulder, small_rock), shadow
+  label (sunlit/shadowed ground and object, rover_shadow), rock-instance image and depth, by GPU ray casting (Warp)
+  against the exact render geometry; depth agrees with the renderer to 2 mm (95th percentile) and classes 99.98-100 %.
+  See `docs/decision_log.md` for what was taken from MARE, what differs, and the measured numbers.
+
+![Ray-cast ground truth: RGB, object mask and shadow label of the front and rear cameras](docs/images/ground_truth_masks.png)
 
 ## Requirements
 
@@ -94,6 +105,10 @@ scripts/isaac_run.sh scripts/render_drive_video.py --preset gpu_8gb         # ch
 scripts/isaac_run.sh tests/isaac/smoke_terrain_drive.py --preset gpu_8gb    # terrain, colliders, rocks, wheels follow ground
 scripts/isaac_run.sh tests/isaac/smoke_wheel_tracks.py --preset gpu_8gb     # tracks visible in renders
 scripts/isaac_run.sh scripts/render_sun_glare_check.py                      # camera glare comparison PNG
+$ISAAC_ENV/bin/python scripts/plan_expert_routes.py --preset gpu_8gb        # expert routes on the cost map (no Isaac)
+scripts/isaac_run.sh tests/isaac/smoke_scripted_expert.py --preset gpu_8gb  # expert drives the PhysX rover to goals
+scripts/isaac_run.sh tests/isaac/check_ground_truth_masks.py --preset gpu_8gb  # masks vs the renderer's depth/semantics
+scripts/run_unit_tests.sh                                                   # Isaac-free unit tests
 ```
 
 Presets: `smoke` (small, fast), `gpu_8gb` (default), `gpu_32gb` (RTX 5090; extrapolated, not yet run).

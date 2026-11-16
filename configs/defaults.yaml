@@ -254,3 +254,47 @@ appearance:                               # runtime only (see AppearanceConfigur
   source: native                          # native | lunar_regolith_overlay | lunar_regolith_scene
   quality: realtime                       # lunar_regolith quality preset of the built appearance
   tag: ""                                 # scene mode: selects regolith_appearance/scene_<quality>_<tag>
+
+expert:                                   # runtime only: privileged scripted driver (see ExpertConfiguration)
+  planner_spacing_m: 0.2                  # cost-map lattice (a subsample of the collision lattice)
+  slope_baseline_m: 0.7                   # slope measured over the wheelbase
+  slope_threshold_deg: 15.0               # steeper cells are impassable (MARE value)
+  slope_cost_breakpoints_deg: [0.0, 5.0, 10.0, 15.0, 20.0]   # DyMu slope cost via MARE, linear in between
+  slope_cost_values: [10.0, 12.0, 15.0, 20.0, 40.0]
+  slope_cost_maximum: 50.0                # at and beyond the last breakpoint
+  rock_obstacle_height_m: 0.10            # ASSUMPTION: rocks standing higher are never driven over (wheel radius 0.15 m)
+  crater_obstacle_minimum_diameter_m: 1.5 # ASSUMPTION: the bowl (inside the rim crest) of craters this large is not entered
+  route_side_clearance_m: 0.05            # route keeps rover half width + this from rock edges
+  preferred_clearance_m: 0.40             # further margin kept when a route exists with it (MARE: dropped otherwise)
+  goal_snap_radius_m: 1.0                 # a goal on impassable ground moves to the nearest drivable cell within this
+  start_release_radius_m: 0.6             # clearance cells this close to the start are opened (the rover may stand near a rock)
+  maximum_forward_speed_m_s: 0.4
+  maximum_forward_acceleration_m_s2: 0.5
+  maximum_yaw_rate_rad_s: 0.5
+  maximum_yaw_acceleration_rad_s2: 1.0
+  speed_resolution_m_s: 0.02              # must stay below acceleration x control period
+  yaw_rate_resolution_rad_s: 0.025
+  prediction_horizon_s: 2.0
+  prediction_step_s: 0.1
+  heading_cost_gain: 1.0
+  speed_cost_gain: 1.0
+  obstacle_safety_m: 0.08                 # the DWA refuses trajectories bringing the footprint this close to a rock
+  lookahead_m: 1.5                        # local goal this far along the route
+  braking_distance_m: 1.5                 # the speed limit falls linearly over this distance to the goal
+  approach_minimum_speed_m_s: 0.1
+  approach_aligned_heading_deg: 20.0
+  stop_tolerance_m: 0.3                   # goal reached within this distance
+  maximum_tilt_deg: 25.0                  # abort above this body tilt
+  stall_window_s: 10.0                    # no progress (motion or turn below the minima) for this long: plan again
+  stall_minimum_motion_m: 0.15
+  stall_minimum_turn_deg: 15.0
+  maximum_stalls: 3                       # consecutive stalls before the goal is aborted
+  replan_deviation_m: 1.0                 # plan again when the rover is this far from its route
+
+ground_truth:                             # runtime only: object and shadow masks (see GroundTruthConfiguration)
+  crater_rim_width_fraction: 0.2          # rim ring outside the crest, fraction of the radius (MARE value)
+  crater_minimum_diameter_m: 0.0          # smaller craters are labelled terrain
+  boulder_minimum_diameter_m: 0.3         # ASSUMPTION (rover scale; MARE uses 1.0 m): larger rocks are boulder, else small_rock
+  sun_glare_radius_deg: 1.1               # ASSUMPTION: MARE's navcam value, not measured on this camera
+  shadow_ray_offset_m: 0.002              # shadow rays start this far above the hit point
+  device: cuda:0

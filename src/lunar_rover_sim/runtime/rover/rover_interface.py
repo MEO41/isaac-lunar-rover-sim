@@ -96,6 +96,12 @@ class RoverInterface:
             wheel_contact_force_n=forces,
             pivot_angle_rad=float(dof_positions[self.pivot_dof_index]) if self.pivot_dof_index is not None else 0.0)
 
+    def read_link_poses(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        """World pose of every articulation link: {link name: (position_m (3,), orientation_xyzw (4,))}."""
+        links = np.asarray(self.articulation.get_link_transforms())[0].astype(np.float64)
+        names = list(self.articulation.shared_metatype.link_names)
+        return {name: (links[index, :3].copy(), links[index, 3:7].copy()) for index, name in enumerate(names)}
+
     def teleport(self, position_m, orientation_xyzw) -> None:
         """Move the rover to a pose with zero velocities (does not stop the timeline)."""
         pose = np.array([[*position_m, *orientation_xyzw]], dtype=np.float32)
