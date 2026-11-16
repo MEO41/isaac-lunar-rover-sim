@@ -1,0 +1,12 @@
+# Apollo 11 landing site, Mare Tranquillitatis (flat mare). Origin near the lunar module.
+# DTM: LROC NAC DTM APOLLO11 (2 m/post, equirectangular, standard parallel 1.0 deg from the PDS label),
+# https://pds.lroc.im-ldi.com/data/LRO-L-LROC-5-RDR-V1.0/LROLRC_2001/DATA/SDP/NAC_DTM/APOLLO11/
+# Origin: lunar module position (LROC-derived, rounded to 1e-5 deg; ASSUMPTION: approximate to a few metres).
+# The same DTM is used as fine and coarse source (no separate mosaic exists for this site).
+site:
+  name: apollo11_landing_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO11.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO11.TIF
+  origin_longitude_deg: 23.47314
+  origin_latitude_deg: 0.67416
+  standard_parallel_deg: 1.0

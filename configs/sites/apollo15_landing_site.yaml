@@ -1,0 +1,14 @@
+# Apollo 15 landing site, Hadley-Apennine (mare plain next to Hadley Rille). Origin near the lunar module.
+# DTM: LROC NAC DTM APOLLO15 (2 m/post, equirectangular, standard parallel 26.0 deg from the PDS label),
+# https://pds.lroc.im-ldi.com/data/LRO-L-LROC-5-RDR-V1.0/LROLRC_2001/DATA/SDP/NAC_DTM/APOLLO15/
+# Origin: 130 m south-southwest of the lunar module (LM at 3.63400 E, 26.13224 N, LROC-derived, ASSUMPTION: approximate
+# to a few metres). The ground at the LM slopes (40 m box: mean 6.0, max 13.0 deg); this patch of the same mare plain
+# is flatter for driving (40 m box: mean 1.9, max 4.7 deg; measured on the DTM 2026-11-16).
+# The same DTM is used as fine and coarse source (no separate mosaic exists for this site).
+site:
+  name: apollo15_landing_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO15.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_APOLLO15.TIF
+  origin_longitude_deg: 3.63195
+  origin_latitude_deg: 26.12835
+  standard_parallel_deg: 26.0

@@ -1,0 +1,6 @@
+# Scene around the Apollo 11 lunar module (site apollo11_landing_site).
+scene_seed: 7
+profile: {site: apollo11_landing_site, rover: skid_steer_four_wheel}
+terrain:
+  backdrop: {enabled: false}             # the single NAC DTM is too small for the 38.4 km backdrop; the 2 km regional tier
+                                          # reaches past the horizon seen from the camera (~1.6 km at 0.75 m height)

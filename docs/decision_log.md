@@ -2,6 +2,26 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-16 (night, later): v1.0.6, three more landing sites
+
+Requested for the VLA layer (test the rover beyond the Apollo 17 valley). Config only, no code change.
+- **Sites** (`configs/sites/`): `apollo11_landing_site` (Mare Tranquillitatis, flat mare), `apollo15_landing_site`
+  (Hadley mare plain), `apollo16_landing_site` (Descartes highlands). LROC NAC DTMs NAC_DTM_APOLLO11 / 15 / 16
+  (2 m/post, equirectangular; standard parallels 1, 26, -9 deg from the PDS labels), downloaded from
+  pds.lroc.im-ldi.com into `lunar_regolith/data/nac_dem` (not in git). The same DTM serves as fine and coarse source.
+  Origins: the lunar-module positions (LROC-derived, ASSUMPTION: approximate to a few metres), except Apollo 15:
+  130 m south-southwest of the LM, where the ground is flatter (40 m box: mean slope 1.9, max 4.7 deg; at the LM
+  6.0 / 13.0 deg). Origin offsets are fixed at 0 in version 1, so the origin coordinates themselves were moved.
+- **Scenes** (`configs/scenes/apolloNN_lunar_module_area.yaml`): backdrop tier off (a single NAC DTM, 4-25 km
+  wide, cannot hold the 38.4 km backdrop; the 2 km regional tier reaches past the camera horizon, ~1.6 km); Apollo 15
+  and 16 search 8 m for a spawn pose (seeds 7-10 at Apollo 15 and seed 31 at Apollo 16 have none within 4 m).
+- **Checked** (minsky, gpu_8gb, scripted expert through the VLA environment, Sun 25 deg): goal reached on Apollo 11
+  seed 23 (357 steps), Apollo 15 seeds 29 and 7 (415, 410), Apollo 16 seeds 31 and 7 (413, 335), nearest hazard
+  0.11-1.16 m. Bake 30-34 s per scene.
+- **Note**: the sub-DEM synthetic content (craters, rocks) depends on the scene seed only, so the same seed gives the
+  same rock and crater layout at every site (seed 7: 6343 pebbles, 776 cobbles, 182 small, 24 medium rocks at all
+  four sites). Use different seeds when sites must not share layouts.
+
 ## 2026-11-16 (night): v1.0.5, the expert keeps clear of crater bowls
 
 Found by the VLA layer (lunar-rover-vla, `tests/isaac/drive_expert_loop.py`, gpu_8gb, minsky RTX 5090): in 1 of 12
