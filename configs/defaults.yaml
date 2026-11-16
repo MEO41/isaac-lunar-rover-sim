@@ -217,6 +217,7 @@ drive:
   boundary_policy: stop_outward
   fall_through_depth_m: 0.5
   fall_through_policy: abort
+  reset_mode: timeline_restart            # exact and history-free (tests/isaac/check_determinism.py); full_state: also exact, 0.2 mm after teleport episodes; teleport: up to 10 cm off
 
 lighting:
   sun_azimuth_deg: 90.0

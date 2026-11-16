@@ -347,6 +347,7 @@ class DriveConfiguration(StrictModel):
     boundary_policy: Literal["stop_outward", "none"]
     fall_through_depth_m: float
     fall_through_policy: Literal["abort", "recover"]
+    reset_mode: Literal["teleport", "full_state", "timeline_restart"]
 
 
 class LightingConfiguration(StrictModel):

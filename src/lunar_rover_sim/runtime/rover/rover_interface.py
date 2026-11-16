@@ -96,6 +96,20 @@ class RoverInterface:
             wheel_contact_force_n=forces,
             pivot_angle_rad=float(dof_positions[self.pivot_dof_index]) if self.pivot_dof_index is not None else 0.0)
 
+    def read_joint_state(self) -> tuple[np.ndarray, np.ndarray]:
+        """(positions, velocities) of every articulation degree of freedom (rad, rad/s), metatype order."""
+        positions = np.asarray(self.articulation.get_dof_positions())[0].astype(np.float64)
+        velocities = np.asarray(self.articulation.get_dof_velocities())[0].astype(np.float64)
+        return positions, velocities
+
+    def set_joint_state(self, positions: np.ndarray, velocities: np.ndarray | None = None) -> None:
+        """Set every degree of freedom's position (and velocity, default zero); wheel velocity targets are zeroed."""
+        indices = np.array([0], dtype=np.int32)
+        self.articulation.set_dof_positions(np.asarray(positions, dtype=np.float32).reshape(1, -1), indices)
+        velocity = np.zeros(self.dof_count) if velocities is None else np.asarray(velocities)
+        self.articulation.set_dof_velocities(np.asarray(velocity, dtype=np.float32).reshape(1, -1), indices)
+        self.set_wheel_velocity_targets(np.zeros(4))
+
     def read_link_poses(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         """World pose of every articulation link: {link name: (position_m (3,), orientation_xyzw (4,))}."""
         links = np.asarray(self.articulation.get_link_transforms())[0].astype(np.float64)

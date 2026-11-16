@@ -141,6 +141,7 @@ class RoverDriveSession:
         self.stepper.start()
         self.rover = RoverInterface(self.stage, self.rover_paths, self.stepper.physics_dt_s)
         self.rover.initialize()
+        self.initial_joint_positions = self.rover.read_joint_state()[0]
         self._wait_for_colliders()
         self.start_report.build_seconds["collider_wait"] = round(time.perf_counter() - timer, 2)
         if self.enable_tracks:
@@ -204,9 +205,29 @@ class RoverDriveSession:
         self.log(f"[session] colliders ready after {updates} updates; {len(points)} raycasts, max error "
                  f"{maximum_error * 1000:.3f} mm", flush=True)
 
-    def reset(self, pose: SupportPose | None = None, clear_tracks: bool = True) -> None:
-        """Teleport to a rest pose (default: spawn), settle, and check that the rover rests on the terrain."""
+    def _restart_physics(self) -> None:
+        """Stop and play the timeline: PhysX rebuilds its scene from the stage as in a fresh process; views are rebuilt."""
+        import omni.timeline
+        timeline = omni.timeline.get_timeline_interface()
+        timeline.stop()
+        self.application.update()
+        timeline.play()
+        self.application.update()
+        self.rover.initialize()
+        self._wait_for_colliders()
+
+    def reset(self, pose: SupportPose | None = None, clear_tracks: bool = True, mode: str | None = None) -> None:
+        """Put the rover at a rest pose (default: spawn), settle, and check that it rests on the terrain.
+
+        mode (default ``drive.reset_mode``): 'teleport' moves the root only (joint angles and the solver's contact
+        state carry over); 'full_state' also restores every joint to its initial angle with zero velocity;
+        'timeline_restart' rebuilds the physics scene first (stop/play), then places the rover."""
         pose = pose or self.spawn_pose
+        mode = mode or self.configuration.drive.reset_mode
+        if mode not in ("teleport", "full_state", "timeline_restart"):
+            raise ValueError(f"unknown reset mode {mode!r}")
+        if mode == "timeline_restart":
+            self._restart_physics()
         if self.track_runtime is not None:
             self.track_runtime.sampling_enabled = False
             if clear_tracks:
@@ -214,6 +235,8 @@ class RoverDriveSession:
         self.limiter.reset()
         self.yaw_controller.reset()
         self.rover.teleport(np.array(pose.position_m) + [0.0, 0.0, 0.01], pose.orientation_xyzw)
+        if mode in ("full_state", "timeline_restart"):
+            self.rover.set_joint_state(self.initial_joint_positions)
         settle_steps = self.configuration.drive.settle_physics_steps
         self.stepper.advance_physics_steps(settle_steps)
         state = self.rover.read_state()

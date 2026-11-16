@@ -217,6 +217,33 @@ def set_sun_direction(stage, azimuth_deg: float, elevation_deg: float) -> np.nda
     return sun_direction_from_stage(stage)
 
 
+SHADOW_CASTER_ROOTS = ("/World/Terrain", "/World/Rocks", "/World/RockPrototypes", "/World/Rover",
+                       "/World/RegolithAppearance")      # the last one exists only in lunar_regolith scene mode
+
+
+def set_cast_shadows(stage, enabled: bool) -> int:
+    """Switch the shadows cast by terrain, rocks and the rover on or off (``primvars:doNotCastShadows``); returns the
+    number of prims changed.
+
+    Checked with tests/isaac/check_shadows_off.py (gpu_8gb, Sun 15 deg): with shadows off, 78-99 % of the pixels the
+    ray-cast shadow_cause image marks as cast brighten by more than 0.05 luminance, sunlit pixels change by 0.003-0.005
+    (render noise 0.0014-0.0016; bounce light from ground that is no longer shaded), surfaces facing away from the
+    Sun stay dark. The Sun light's own shadow switch (UsdLux inputs:shadow:enable) and /rtx/shadows/enabled have no
+    useful effect with RealTimePathTracing (0.03-16 % of cast pixels brightened)."""
+    from pxr import Usd
+    prims = []
+    for root in SHADOW_CASTER_ROOTS:
+        root_prim = stage.GetPrimAtPath(root)
+        if root_prim and root_prim.IsValid():
+            prims += [prim for prim in Usd.PrimRange(root_prim)
+                      if prim.IsA(UsdGeom.Gprim) or prim.IsA(UsdGeom.PointInstancer)]
+    with Sdf.ChangeBlock():
+        for prim in prims:
+            UsdGeom.PrimvarsAPI(prim).CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool,
+                                                    UsdGeom.Tokens.constant).Set(not enabled)
+    return len(prims)
+
+
 def sun_direction_from_stage(stage) -> np.ndarray:
     """Unit vector towards the Sun (site frame): the Sun light's local +Z axis in world coordinates."""
     from pxr import Usd

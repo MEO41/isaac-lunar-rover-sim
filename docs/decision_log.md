@@ -2,6 +2,28 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-16 (evening): cast shadows switch, exact resets
+
+- **`set_cast_shadows(stage, enabled)`** (`scene_stage_builder`): `primvars:doNotCastShadows` on every terrain, rock
+  and rover prim. `tests/isaac/check_shadows_off.py` (gpu_8gb, Sun 90/15 deg, front/rear/observer), judged with the
+  ray-cast shadow_cause image: 78.5 / 99.0 / 89.7 % of cast-shadow pixels brighten by > 0.05 luminance; sunlit pixels
+  change 0.003-0.005 mean absolute luminance (render noise floor 0.0014-0.0016: bounce light from ground that is no
+  longer shaded); faces-away pixels stay dark; after switching back the image is within 2-5x the noise floor. The
+  Sun light's own switch (UsdLux `inputs:shadow:enable`) brightens 0.03-0.09 % and `/rtx/shadows/enabled` 3-16 % of
+  the cast pixels with RealTimePathTracing, so neither is used.
+- **Reset modes** (`drive.reset_mode`, `RoverDriveSession.reset(mode=...)`): the old reset (now `teleport`) moved the
+  root only; wheel joint angles (5.5 rad apart) and the solver's contact state carried over, and two runs of the same
+  150-step command sequence differed by up to 9.6 cm. `full_state` also restores every joint angle and velocity;
+  `timeline_restart` stops and plays the timeline (PhysX rebuilds its scene from the stage), rebuilds the tensor
+  views, waits for the colliders, then places the rover. `tests/isaac/check_determinism.py`, two processes with the
+  modes in different orders: full_state and timeline_restart are bit-identical within a process, to each other and
+  across an Isaac restart (pose, wheel angles, track field, masks, depth all 0.0 difference); teleport is
+  reproducible across processes as a sequence but each episode depends on the previous ones. One earlier run of
+  full_state after teleport episodes ended 0.2 mm off, so the default is `timeline_restart` (0.63-0.68 s per reset;
+  full_state 0.21 s). Rendered RGB is not bit-identical even with identical physics (RTX sampling and temporal
+  history): mean 1.2-1.8 / 255 between runs, 0.2 / 255 between two renders of the same state. The expert smoke test
+  reproduced its earlier numbers exactly with the new default.
+
 ## 2026-11-16 (later): pinned exposure, shadow cause, runtime Sun, rover-class check
 
 Requested by the VLA-layer handoff (`lunar-rover-vla/handoff_vla_layer/docs/11_reconciliation_with_simulator.md`).
