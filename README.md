@@ -4,7 +4,22 @@ A lunar rover simulator for NVIDIA Isaac Sim 6.0.1, built as the environment for
 research. Version 1 is the simulation environment only; the learning-facing layer (gym wrapper, episode recorder,
 tasks, language) comes once the environment is trusted. Design: [docs/DESIGN.md](docs/DESIGN.md).
 
+## Demo
+
+8 s drive on the Apollo 17 valley floor (preset `gpu_8gb`, Sun 15° above the eastern horizon), rendered headless with
+`scripts/render_drive_video.py`. Click a preview for the full-quality MP4.
+
+| Chase camera | Rover front camera (what a policy would see) |
+|---|---|
+| [![chase camera](docs/videos/rover_drive_chase.gif)](docs/videos/rover_drive_chase.mp4) | [![front camera](docs/videos/rover_drive_front_camera.gif)](docs/videos/rover_drive_front_camera.mp4) |
+
+Watch for the wheel tracks with grouser imprints forming behind the rover during the left turn, rocks casting long
+shadows, and the North and South Massifs (real DTM heights) on the horizon.
+
 ![sun glare check](docs/images/sun_glare_check.png)
+
+*Camera glare (`render.sun_glare`): glare off, then bloom scale 0.15 / 0.3 / 0.6 (default). Only the Sun blooms; the
+terrain brightness is unchanged.*
 
 ## What it does
 
