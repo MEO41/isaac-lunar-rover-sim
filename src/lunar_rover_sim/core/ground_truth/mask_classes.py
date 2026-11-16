@@ -45,7 +45,16 @@ SHADOW_CLASSES = (
     MaskClass(5, "rover_shadow", "ground", (250, 140, 20), "ground or rock in the rover's own shadow"),
 )
 
+SHADOW_CAUSE_CLASSES = (       # not in MARE: separates what a shadows-off render changes from what it cannot change
+    MaskClass(0, "sky", "sky", (0, 0, 0), "no surface"),
+    MaskClass(1, "sunlit", "lit", (40, 120, 230), "faces the Sun and nothing blocks it"),
+    MaskClass(2, "cast_by_scene", "cast", (20, 20, 60), "faces the Sun, terrain or a rock blocks it (lit with cast shadows off)"),
+    MaskClass(3, "cast_by_rover", "cast", (250, 140, 20), "faces the Sun, the rover blocks it (lit with cast shadows off)"),
+    MaskClass(4, "faces_away", "unlit", (120, 60, 160), "faces away from the Sun (stays dark with cast shadows off)"),
+)
+
 OBJECT_ID = {mask_class.name: mask_class.id for mask_class in OBJECT_CLASSES}
+SHADOW_CAUSE_ID = {mask_class.name: mask_class.id for mask_class in SHADOW_CAUSE_CLASSES}
 SHADOW_ID = {mask_class.name: mask_class.id for mask_class in SHADOW_CLASSES}
 GROUND_OBJECT_IDS = (OBJECT_ID["terrain"], OBJECT_ID["crater"], OBJECT_ID["crater_rim"], OBJECT_ID["wheel_track"])
 
@@ -54,6 +63,7 @@ def legend() -> dict:
     """JSON-ready legend of both label images (written next to every saved mask)."""
     return {"object_mask": [asdict(mask_class) for mask_class in OBJECT_CLASSES],
             "shadow_label": [asdict(mask_class) for mask_class in SHADOW_CLASSES],
+            "shadow_cause": [asdict(mask_class) for mask_class in SHADOW_CAUSE_CLASSES],
             "source": "ids and colours after MARE mask_classes.json (landscape -> terrain); shadow ids after MARE "
                       "shadow_label; computed by ray casting against this simulator's render geometry"}
 

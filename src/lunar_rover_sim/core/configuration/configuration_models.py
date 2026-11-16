@@ -375,10 +375,27 @@ class SunGlareConfiguration(StrictModel):
     spectral_samples: int
 
 
+class ExposureConfiguration(StrictModel):
+    """Pinned camera exposure and tone mapping (RTX /rtx/post/tonemap and /rtx/post/histogram).
+
+    Values are the Isaac Sim 6.0.1 defaults read back on 2026-11-16, written explicitly at start-up so that a
+    different default cannot change image brightness. With auto exposure off, frame brightness follows the Sun
+    intensity (measured: mean luminance 0.469, 0.333, 0.193 at 1, 0.5, 0.25 x intensity)."""
+
+    auto_exposure: bool
+    tonemap_operator: int
+    film_iso: float
+    camera_shutter: float
+    f_number: float
+    exposure_compensation: float
+    white_scale: float
+
+
 class RenderConfiguration(StrictModel):
     """RTX render and camera settings."""
 
     sun_glare: SunGlareConfiguration
+    exposure: ExposureConfiguration
     renderer: Literal["RealTimePathTracing", "RayTracedLighting", "PathTracing"]
     camera_resolution_px: tuple[int, int]
     anti_aliasing_mode: int

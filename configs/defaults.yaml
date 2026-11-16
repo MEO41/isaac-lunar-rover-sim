@@ -243,6 +243,14 @@ render:
     aperture_blades: 6                    # star with 12 points
     f_stop: 5.6
     spectral_samples: 0                   # > 0 adds spectral diffraction; it tints the whole frame, so off
+  exposure:                               # pinned tone mapping (Isaac Sim 6.0.1 defaults, written explicitly at start-up)
+    auto_exposure: false                  # histogram auto exposure off: brightness follows the Sun intensity
+    tonemap_operator: 6                   # RTX tonemapper op 6 (default)
+    film_iso: 100.0
+    camera_shutter: 50.0                  # 1/50 s
+    f_number: 5.0
+    exposure_compensation: 0.0
+    white_scale: 40.2
 
 window:
   viewport_resolution_px: [1280, 720]

@@ -193,14 +193,36 @@ def build_lighting(stage, scene: LoadedScene, azimuth_deg: float | None = None, 
     lighting = scene.configuration.lighting
     azimuth = lighting.sun_azimuth_deg if azimuth_deg is None else azimuth_deg
     elevation = lighting.sun_elevation_deg if elevation_deg is None else elevation_deg
-    sun = UsdLux.DistantLight.Define(stage, "/World/Sun")
+    sun = UsdLux.DistantLight.Define(stage, SUN_PATH)
     sun.CreateIntensityAttr(float(lighting.sun_base_intensity * lighting.exposure_scale))
     sun.CreateAngleAttr(float(lighting.sun_angular_diameter_deg))
     sun.CreateColorAttr(Gf.Vec3f(*map(float, lighting.sun_color)))
-    xformable = UsdGeom.Xformable(sun)
+    set_sun_direction(stage, azimuth, elevation)
+
+
+SUN_PATH = "/World/Sun"
+
+
+def set_sun_direction(stage, azimuth_deg: float, elevation_deg: float) -> np.ndarray:
+    """Re-pose the Sun (also at runtime): azimuth = compass bearing towards the Sun, elevation above the horizon.
+
+    Returns the unit vector towards the Sun read back from the stage. Raises ValueError for an elevation outside
+    [-90, 90] (no clamping). The ground-truth mask renderer reads the same direction from the stage."""
+    if not -90.0 <= elevation_deg <= 90.0:
+        raise ValueError(f"sun elevation {elevation_deg} deg is outside [-90, 90]")
+    xformable = UsdGeom.Xformable(stage.GetPrimAtPath(SUN_PATH))
     xformable.ClearXformOpOrder()
-    xformable.AddRotateZOp().Set(float(90.0 - azimuth))
-    xformable.AddRotateYOp().Set(float(90.0 - elevation))
+    xformable.AddRotateZOp().Set(float(90.0 - azimuth_deg))
+    xformable.AddRotateYOp().Set(float(90.0 - elevation_deg))
+    return sun_direction_from_stage(stage)
+
+
+def sun_direction_from_stage(stage) -> np.ndarray:
+    """Unit vector towards the Sun (site frame): the Sun light's local +Z axis in world coordinates."""
+    from pxr import Usd
+    matrix = UsdGeom.XformCache(Usd.TimeCode.Default()).GetLocalToWorldTransform(stage.GetPrimAtPath(SUN_PATH))
+    direction = np.array(matrix.TransformDir(Gf.Vec3d(0.0, 0.0, 1.0)), dtype=np.float64)
+    return direction / np.linalg.norm(direction)
 
 
 REGOLITH_APPEARANCE_ROOT = "/World/RegolithAppearance"

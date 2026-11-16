@@ -1,9 +1,11 @@
 """Check the ray-cast ground-truth masks against the renderer (Isaac, headless).
 
     scripts/isaac_run.sh tests/isaac/check_ground_truth_masks.py [--preset gpu_8gb] [--drive-s 8]
-        [--sun-azimuth-deg 90] [--sun-elevation-deg 15] [--copy-figure]
+        [--sun-azimuth-deg 90] [--sun-elevation-deg 15] [--runtime-sun AZIMUTH ELEVATION] [--copy-figure]
 
-The rover drives forward (leaving tracks), then the front and rear cameras are rendered with the RTX annotators
+--runtime-sun moves the Sun with set_sun_direction after the stage is built (checks that masks follow it).
+The rover drives forward (leaving tracks), then the front and rear cameras and an observer camera that sees the
+rover are rendered with the RTX annotators
 (rgb, distance_to_image_plane, semantic_segmentation) and our masks are ray cast for the same instant. Measured per
 camera (result.json under <data root>/runs/check_ground_truth_masks/<timestamp>/):
   * depth: |ours - renderer| on pixels where both see a surface (median, 95th percentile, share within 1 % + 5 mm)
@@ -33,6 +35,7 @@ parser.add_argument("--preset", default="gpu_8gb")
 parser.add_argument("--drive-s", type=float, default=8.0)
 parser.add_argument("--sun-azimuth-deg", type=float, default=None)
 parser.add_argument("--sun-elevation-deg", type=float, default=None)
+parser.add_argument("--runtime-sun", type=float, nargs=2, default=None, metavar=("AZIMUTH_DEG", "ELEVATION_DEG"))
 parser.add_argument("--copy-figure", action="store_true")
 arguments = parser.parse_args()
 overrides = []
@@ -48,11 +51,15 @@ application, data_root = start_simulation_application(configuration, headless=Tr
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
+from lunar_rover_sim.core.frames.pose_math import sun_direction_w, yaw_from_quaternion  # noqa: E402
 from lunar_rover_sim.core.ground_truth.mask_classes import (GROUND_OBJECT_IDS, OBJECT_CLASSES, OBJECT_ID,  # noqa: E402
-                                                            SHADOW_CLASSES, SHADOW_ID, colorize, legend)
+                                                            SHADOW_CAUSE_CLASSES, SHADOW_CLASSES, SHADOW_ID, colorize,
+                                                            legend)
+from lunar_rover_sim.runtime.application import exposure_snapshot  # noqa: E402
+from lunar_rover_sim.runtime.stage_assembly.scene_stage_builder import set_sun_direction, sun_direction_from_stage  # noqa: E402
 from lunar_rover_sim.core.scene.scene_loader import load_scene  # noqa: E402
 from lunar_rover_sim.runtime.driving.rover_drive_session import RoverDriveSession  # noqa: E402
-from lunar_rover_sim.runtime.sensors.camera_rig import CameraRig, save_png  # noqa: E402
+from lunar_rover_sim.runtime.sensors.camera_rig import CameraRig, define_observer_camera, save_png  # noqa: E402
 from lunar_rover_sim.runtime.sensors.ground_truth_masks import GroundTruthMaskRenderer  # noqa: E402
 from lunar_rover_sim.runtime.stepping import render_synchronously  # noqa: E402
 
@@ -136,17 +143,33 @@ try:
     print(f"[masks] scene {scene.directory}\n[masks] run directory {run_directory}", flush=True)
     session = RoverDriveSession(application, scene, stepper_mode="explicit")
     session.start()
+    sun_check = None
+    if arguments.runtime_sun is not None:
+        azimuth, elevation = arguments.runtime_sun
+        read_back = set_sun_direction(session.stage, azimuth, elevation)
+        expected = sun_direction_w(azimuth, elevation)
+        sun_check = {"azimuth_deg": azimuth, "elevation_deg": elevation,
+                     "angle_between_read_back_and_expected_deg": float(np.degrees(np.arccos(np.clip(read_back @ expected, -1, 1))))}
+        print(f"[masks] runtime sun {sun_check}", flush=True)
     control_rate = configuration.drive.control_rate_hz
     for _ in range(int(arguments.drive_s * control_rate)):
         session.advance_control_step(0.3, 0.05)
     for _ in range(control_rate):
         session.advance_control_step(0.0, 0.0)
     resolution = tuple(configuration.render.camera_resolution_px)
-    cameras = [name for name in ("front", "rear") if getattr(configuration.rover.cameras, name).enabled]
+    camera_paths = {name: session.rover_paths.cameras[name] for name in ("front", "rear")
+                    if getattr(configuration.rover.cameras, name).enabled}
+    state = session.rover.read_state()
+    heading = yaw_from_quaternion(state.orientation_xyzw)
+    forward = np.array([np.cos(heading), np.sin(heading), 0.0])
+    left = np.array([-np.sin(heading), np.cos(heading), 0.0])
+    eye = state.position_m - 2.6 * forward + 1.3 * left + np.array([0.0, 0.0, 1.25])
+    camera_paths["observer"] = define_observer_camera(session.stage, "/World/ObserverCamera", eye,
+                                                      state.position_m + np.array([0.0, 0.0, 0.1]), 65.0, resolution)
+    cameras = list(camera_paths)
     rig = CameraRig()
     for name in cameras:
-        rig.add_camera(name, session.rover_paths.cameras[name], resolution,
-                       ("rgb", "distance_to_image_plane", "semantic_segmentation"))
+        rig.add_camera(name, camera_paths[name], resolution, ("rgb", "distance_to_image_plane", "semantic_segmentation"))
     if session.track_runtime is not None:
         session.track_runtime.force_mask_upload()
     render_synchronously(configuration.render.warmup_subframes_after_reset + 8)
@@ -158,9 +181,9 @@ try:
     results, rows = [], []
     for name in cameras:
         rendered = rig.read(name)
-        mask_renderer.render(session.rover_paths.cameras[name], resolution)     # first call compiles the kernels
+        mask_renderer.render(camera_paths[name], resolution)     # first call compiles the kernels
         started = time.perf_counter()
-        images = mask_renderer.render(session.rover_paths.cameras[name], resolution)
+        images = mask_renderer.render(camera_paths[name], resolution)
         mask_seconds = time.perf_counter() - started
         numbers = compare(name, rendered, images, random_generator)
         numbers["mask_render_ms"] = round(1000 * mask_seconds, 1)
@@ -171,6 +194,8 @@ try:
         print(f"[masks] {name} shadows: {json.dumps(numbers['shadows'])}", flush=True)
         Image.fromarray(images.object_mask).save(run_directory / f"{name}_object_mask.png")
         Image.fromarray(images.shadow_label).save(run_directory / f"{name}_shadow_label.png")
+        Image.fromarray(images.shadow_cause).save(run_directory / f"{name}_shadow_cause.png")
+        numbers["shadow_cause_counts"] = {c.name: int((images.shadow_cause == c.id).sum()) for c in SHADOW_CAUSE_CLASSES}
         Image.fromarray(images.rock_instance.astype(np.uint16)).save(run_directory / f"{name}_rock_instance.png")
         save_png(run_directory / f"{name}_rgb.png", rendered["rgb"])
         rows.append((name, rendered["rgb"], colorize(images.object_mask, OBJECT_CLASSES),
@@ -196,8 +221,10 @@ try:
                        loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=4, fontsize=7, frameon=False)
     axes[-1, 2].legend(handles=[Patch(color=np.array(c.rgb) / 255, label=c.name) for c in SHADOW_CLASSES if c in present_shadows],
                        loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=3, fontsize=7, frameon=False)
-    figure.suptitle(f"Ray-cast ground truth (MARE classes), Sun azimuth {configuration.lighting.sun_azimuth_deg} deg, "
-                    f"elevation {configuration.lighting.sun_elevation_deg} deg", fontsize=10)
+    sun_used = sun_direction_from_stage(session.stage)
+    figure.suptitle(f"Ray-cast ground truth (MARE classes), Sun azimuth "
+                    f"{np.degrees(np.arctan2(sun_used[0], sun_used[1])) % 360:.0f} deg, elevation "
+                    f"{np.degrees(np.arcsin(sun_used[2])):.0f} deg", fontsize=10)
     figure.tight_layout()
     figure.savefig(run_directory / "ground_truth_masks.png")
     if arguments.copy_figure:
@@ -206,7 +233,8 @@ try:
                "face_counts": mask_renderer.face_counts, "metadata": mask_renderer.metadata(), "cameras": results,
                "sun": {"azimuth_deg": configuration.lighting.sun_azimuth_deg,
                        "elevation_deg": configuration.lighting.sun_elevation_deg},
-               "video_memory_mib": process_video_memory_mib()}
+               "video_memory_mib": process_video_memory_mib(), "exposure_read_back": exposure_snapshot(),
+               "runtime_sun_check": sun_check, "sun_direction_used": sun_direction_from_stage(session.stage).tolist()}
     (run_directory / "result.json").write_text(json.dumps(summary, indent=1))
     print(f"[masks] video memory {summary['video_memory_mib']} MiB; wrote {run_directory}", flush=True)
     rig.destroy()

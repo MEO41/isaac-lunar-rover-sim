@@ -8,7 +8,8 @@ import pytest
 
 from lunar_rover_sim.core.data_model.regular_grid import RegularGrid
 from lunar_rover_sim.core.frames.pose_math import sun_direction_w
-from lunar_rover_sim.core.ground_truth.mask_classes import OBJECT_CLASSES, OBJECT_ID, SHADOW_CLASSES, SHADOW_ID, colorize, legend
+from lunar_rover_sim.core.ground_truth.mask_classes import (OBJECT_CLASSES, OBJECT_ID, SHADOW_CAUSE_ID, SHADOW_CLASSES,
+                                                            SHADOW_ID, colorize, legend)
 from lunar_rover_sim.core.ground_truth.mask_composition import RayCastResult, compose_ground_truth, sky_classes
 from lunar_rover_sim.core.ground_truth.scene_geometry import (OBJECT_KIND_ROCK, OBJECT_KIND_ROVER, OBJECT_KIND_TERRAIN,
                                                               crater_class_raster, lattice_soup, nearest_lattice_value)
@@ -83,12 +84,14 @@ def test_composition_rules():
                            np.array([r[3] for r in rows]), np.array([r[4] for r in rows]))
     ground = np.full(count, OBJECT_ID["terrain"], np.uint8)
     ground[1] = OBJECT_ID["crater"]
-    object_ids, shadow_ids, instance = compose_ground_truth(result, ground, np.array([0.5, 0.1]), sun, 0.265, 1.1, 0.3)
+    object_ids, shadow_ids, instance, cause = compose_ground_truth(result, ground, np.array([0.5, 0.1]), sun, 0.265, 1.1, 0.3)
     assert object_ids.tolist() == [5, 6, 5, 2, 9, 10, 5, 3]
     assert shadow_ids.tolist() == [SHADOW_ID[name] for name in (
         "sunlit_ground", "shadowed_ground", "rover_shadow", "shadowed_object", "sunlit_object", "rover_shadow",
         "shadowed_ground", "sky")]
     assert instance.tolist() == [0, 0, 0, 0, 1, 2, 0, 0]
+    assert cause.tolist() == [SHADOW_CAUSE_ID[name] for name in (
+        "sunlit", "cast_by_scene", "cast_by_rover", "cast_by_rover", "sunlit", "cast_by_rover", "faces_away", "sky")]
 
 
 def test_lattice_soup_matches_stage_triangulation():

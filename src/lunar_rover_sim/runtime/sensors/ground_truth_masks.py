@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 import warp as wp
 
-from lunar_rover_sim.core.frames.pose_math import rotation_matrix_from_quaternion, sun_direction_w
+from lunar_rover_sim.core.frames.pose_math import rotation_matrix_from_quaternion
 from lunar_rover_sim.core.ground_truth.mask_classes import OBJECT_ID
 from lunar_rover_sim.core.ground_truth.mask_composition import GroundTruthImages, RayCastResult, compose_ground_truth
 from lunar_rover_sim.core.ground_truth.scene_geometry import (OBJECT_KIND_ROVER, OBJECT_KIND_TERRAIN, TriangleSoup,
@@ -291,10 +291,13 @@ class GroundTruthMaskRenderer:
 
     # ------------------------------------------------------------------ render
     def render(self, camera_path: str, resolution_px, sun_direction: np.ndarray | None = None) -> GroundTruthImages:
-        """Label images of a camera at the current simulation state."""
+        """Label images of a camera at the current simulation state.
+
+        The Sun direction is read from the stage's Sun light (so masks follow ``set_sun_direction``) unless given."""
+        from lunar_rover_sim.runtime.stage_assembly.scene_stage_builder import sun_direction_from_stage
         lighting, ground_truth = self.configuration.lighting, self.configuration.ground_truth
-        sun = np.asarray(sun_direction if sun_direction is not None else
-                         sun_direction_w(lighting.sun_azimuth_deg, lighting.sun_elevation_deg), dtype=np.float64)
+        sun = np.asarray(sun_direction if sun_direction is not None else sun_direction_from_stage(self.session.stage),
+                         dtype=np.float64)
         sun /= np.linalg.norm(sun)
         self.update_workspace()
         link_poses = self.update_rover()
@@ -354,13 +357,13 @@ class GroundTruthMaskRenderer:
             ground_class[terrain] = classes
         result = RayCastResult(kind, index, points, normal, directions, distance,
                                blocked_world.numpy().astype(bool), blocked_rover.numpy().astype(bool))
-        object_ids, shadow_ids, rock_instance = compose_ground_truth(
+        object_ids, shadow_ids, rock_instance, shadow_cause = compose_ground_truth(
             result, ground_class, self.rocks_diameter_m, sun, lighting.sun_angular_diameter_deg / 2,
             ground_truth.sun_glare_radius_deg, ground_truth.boulder_minimum_diameter_m)
         shape = (model["height"], model["width"])
         depth = (distance * model["depth_factor"]).astype(np.float32)
         return GroundTruthImages(object_ids.reshape(shape), shadow_ids.reshape(shape), rock_instance.reshape(shape),
-                                 depth.reshape(shape))
+                                 depth.reshape(shape), shadow_cause.reshape(shape))
 
     def metadata(self) -> dict:
         """Provenance of the masks (written next to saved frames)."""

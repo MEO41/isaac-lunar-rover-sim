@@ -2,6 +2,29 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-16 (later): pinned exposure, shadow cause, runtime Sun, rover-class check
+
+Requested by the VLA-layer handoff (`lunar-rover-vla/handoff_vla_layer/docs/11_reconciliation_with_simulator.md`).
+
+- **Exposure pinned** (`render.exposure`, `application.apply_exposure`): auto exposure (`/rtx/post/histogram/enabled`)
+  off, tonemapper op 6, ISO 100, shutter 1/50 s, f/5, compensation 0, white scale 40.2, written at start-up and read
+  back (raises if a value does not stick); `exposure_snapshot()` for run metadata. These are the Isaac Sim 6.0.1
+  defaults read on 2026-11-16, so images are unchanged. Probe (gpu_8gb, observer camera, Sun intensity 1 / 0.5 /
+  0.25 x): mean frame luminance 0.469 / 0.333 / 0.193 with auto exposure off, 0.478 / 0.375 / 0.277 with it on, i.e.
+  the default already follows the Sun intensity and auto exposure would partly compensate it.
+- **Shadow cause image** (`SHADOW_CAUSE_CLASSES`, `GroundTruthImages.shadow_cause`; not in MARE): sky, sunlit,
+  cast_by_scene, cast_by_rover, faces_away. faces_away wins (such pixels stay dark with cast shadows off), then
+  cast_by_rover, then cast_by_scene; classes 2-3 are exactly the pixels a cast-shadows-off render would light. The
+  MARE shadow label is unchanged. Measured at Sun 90 / 15 deg (front camera): 7,690 cast_by_scene and 19,181
+  faces_away pixels, so about 70 % of the dark ground in that view is self-shading that a shadows-off render cannot
+  remove.
+- **Runtime Sun** (`scene_stage_builder.set_sun_direction`, `sun_direction_from_stage`): re-poses `/World/Sun`, raises
+  outside [-90, 90] deg elevation; the mask renderer now reads the Sun direction from the stage by default. Check
+  (`--runtime-sun 200 30`): read-back vs `sun_direction_w` 0.0 deg apart; masks follow it (depth p95 1.95-2.44 mm,
+  classes 99.98-100 %, shadowed darker than sunlit with probability 0.976-0.994).
+- **Rover class checked**: the mask check now adds an observer camera that sees the rover: 13,233 rover pixels in the
+  RTX semantic annotator, 100 % labelled rover by the ray-cast mask (both Sun settings); depth p95 0.49 mm in that view.
+
 ## 2026-11-16: scripted expert and ground-truth masks, after MARE
 
 Source: MARE lunar rover simulator (Castilla-Arquillo and Olivares-Mendez, arXiv:2610.28465, MIT licence). Designs

@@ -75,7 +75,38 @@ def start_simulation_application(configuration, headless: bool = True, width: in
     settings.set("/log/channels/omni.physx.plugin", "error")
     settings.set("/rtx/raytracing/fractionalCutoutOpacity", False)
     apply_sun_glare(configuration.render.sun_glare)
+    apply_exposure(configuration.render.exposure)
     return application, data_root
+
+
+EXPOSURE_SETTINGS = {
+    "auto_exposure": "/rtx/post/histogram/enabled", "tonemap_operator": "/rtx/post/tonemap/op",
+    "film_iso": "/rtx/post/tonemap/filmIso", "camera_shutter": "/rtx/post/tonemap/cameraShutter",
+    "f_number": "/rtx/post/tonemap/fNumber", "exposure_compensation": "/rtx/post/tonemap/exposure/compensation",
+    "white_scale": "/rtx/post/tonemap/whiteScale",
+}
+
+
+def apply_exposure(exposure) -> dict:
+    """Write the pinned exposure / tone-mapping settings; returns the values read back (raises if one did not stick)."""
+    import carb
+    settings = carb.settings.get_settings()
+    read_back = {}
+    for name, path in EXPOSURE_SETTINGS.items():
+        value = getattr(exposure, name)
+        settings.set(path, value)
+        read_back[name] = settings.get(path)
+        if isinstance(value, bool) and bool(read_back[name]) != value or \
+                not isinstance(value, bool) and abs(float(read_back[name]) - float(value)) > 1e-3 * max(1.0, abs(float(value))):
+            raise RuntimeError(f"render setting {path} reads back {read_back[name]!r}, expected {value!r}")
+    return read_back
+
+
+def exposure_snapshot() -> dict:
+    """Current exposure / tone-mapping settings (for run metadata)."""
+    import carb
+    settings = carb.settings.get_settings()
+    return {name: settings.get(path) for name, path in EXPOSURE_SETTINGS.items()}
 
 
 def apply_sun_glare(glare) -> None:

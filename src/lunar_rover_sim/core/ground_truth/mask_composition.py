@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from lunar_rover_sim.core.ground_truth.mask_classes import OBJECT_ID, SHADOW_ID
+from lunar_rover_sim.core.ground_truth.mask_classes import OBJECT_ID, SHADOW_CAUSE_ID, SHADOW_ID
 from lunar_rover_sim.core.ground_truth.scene_geometry import OBJECT_KIND_ROCK, OBJECT_KIND_ROVER, OBJECT_KIND_TERRAIN
 
 
@@ -44,6 +44,7 @@ class GroundTruthImages:
     shadow_label: np.ndarray        # uint8 SHADOW_CLASSES ids
     rock_instance: np.ndarray       # int32 rock table row + 1, 0 elsewhere
     depth_m: np.ndarray             # float32 distance to the image plane (inf for sky)
+    shadow_cause: np.ndarray        # uint8 SHADOW_CAUSE_CLASSES ids (why a pixel is dark)
 
 
 def sky_classes(ray_direction: np.ndarray, sun_direction: np.ndarray, sun_disc_radius_deg: float,
@@ -57,8 +58,11 @@ def sky_classes(ray_direction: np.ndarray, sun_direction: np.ndarray, sun_disc_r
 
 def compose_ground_truth(result: RayCastResult, ground_class: np.ndarray, rock_diameter_m: np.ndarray | None,
                          sun_direction: np.ndarray, sun_disc_radius_deg: float, glare_radius_deg: float,
-                         boulder_minimum_diameter_m: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(object ids, shadow ids, rock instance) per pixel, flattened.
+                         boulder_minimum_diameter_m: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """(object ids, shadow ids, rock instance, shadow cause) per pixel, flattened.
+
+    Shadow cause: faces_away wins (such a pixel stays dark with cast shadows off), then cast_by_rover, then
+    cast_by_scene; pixels of classes 2 and 3 are exactly the ones a cast-shadows-off render would light.
 
     ``ground_class``: object id per pixel for terrain hits (terrain, crater, crater_rim or wheel_track)."""
     count = len(result.hit_kind)
@@ -95,7 +99,12 @@ def compose_ground_truth(result: RayCastResult, ground_class: np.ndarray, rock_d
     shadow_ids[surface & is_object] = SHADOW_ID["sunlit_object"]
     shadow_ids[surface & is_object & shadowed] = SHADOW_ID["shadowed_object"]
     shadow_ids[in_rover_shadow] = SHADOW_ID["rover_shadow"]
-    return object_ids, shadow_ids, rock_instance
+    cause = np.full(count, SHADOW_CAUSE_ID["sky"], dtype=np.uint8)
+    cause[surface] = SHADOW_CAUSE_ID["sunlit"]
+    cause[surface & result.shadow_by_world] = SHADOW_CAUSE_ID["cast_by_scene"]
+    cause[surface & result.shadow_by_rover] = SHADOW_CAUSE_ID["cast_by_rover"]
+    cause[surface & faces_away] = SHADOW_CAUSE_ID["faces_away"]
+    return object_ids, shadow_ids, rock_instance, cause
 
 
 __all__ = ["RayCastResult", "GroundTruthImages", "compose_ground_truth", "sky_classes", "OBJECT_KIND_TERRAIN"]
