@@ -7,7 +7,7 @@ Mission rules per control step (after MARE's ``mission.py``, without the lidar p
  4. no progress (neither ``stall_minimum_motion_m`` moved nor ``stall_minimum_turn_deg`` turned) for
     ``stall_window_s``, or farther than ``replan_deviation_m`` from the route -> plan again from the current pose;
     after ``maximum_stalls`` stalls in a row -> aborted;
- 5. otherwise -> drive with the dynamic-window command along the route.
+ 5. otherwise -> drive with the dynamic-window command along the route (refusing rock hits and bowl entries).
 The expert sees the true scene (rock and crater tables, terrain), never the camera; it is the demonstrator, not a
 perception baseline. Isaac-free: the caller supplies the pose and applies the twist.
 """
@@ -159,7 +159,7 @@ class ScriptedExpert:
                 return ExpertCommand(0.0, 0.0, self.state, self.reason, distance)
             replanned = True
         local = self.local_planner.command(pose, tuple(self.last_command), self.route.path_m, self.goal_m,
-                                           self.map.rock_obstacles)
+                                           self.map.rock_obstacles, self.map.crater_obstacles)
         if local.blocked:
             self.statistics.blocked_steps += 1
         if self._last_stall_position is not None and \

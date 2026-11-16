@@ -5,11 +5,13 @@ MIT licence); this is a re-implementation, vectorised over all sampled commands:
  1. The local goal is the first route point at least ``lookahead_m`` from the route point nearest the rover.
  2. Every (forward speed, yaw rate) reachable within one control period is simulated as a constant-twist arc for the
     prediction horizon. A trajectory that brings the footprint rectangle within ``obstacle_safety_m`` of a rock disc
-    is refused; of the rest, the one heading best at the local goal at the highest speed wins
+    is refused, and so is one that brings the rover centre within ``obstacle_safety_m`` of the bowl of an obstacle
+    crater (v1.0.5; before, the DWA did not see craters and could cut a corner into a bowl); of the rest, the one
+    heading best at the local goal at the highest speed wins
     (cost = heading_gain * |heading error| + speed_gain * |max_speed * exp(-heading cost) - v|).
  3. Within the braking distance the speed limit falls linearly (not below the approach minimum), and the yaw rate is
     damped while the rover already heads at the goal, so it parks instead of circling it.
-Keeping a distance from rocks is the route's job; the DWA only refuses to hit them.
+Keeping a distance from rocks and craters is the route's job; the DWA only refuses to hit them.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from lunar_rover_sim.core.configuration.configuration_models import ExpertConfiguration
-from lunar_rover_sim.core.planning.planner_map import RockObstacles, RoverFootprint
+from lunar_rover_sim.core.planning.planner_map import CraterObstacles, RockObstacles, RoverFootprint
 
 
 @dataclass
@@ -111,6 +113,16 @@ def approach_speed_limit(maximum_speed_m_s: float, distance_to_goal_m: float, co
                configuration.approach_minimum_speed_m_s)
 
 
+def crater_bowl_entered(trajectories: np.ndarray, craters: CraterObstacles | None, safety_m: float) -> np.ndarray:
+    """(K,) True where any pose of a trajectory brings the rover centre within ``safety_m`` of an obstacle-crater bowl
+    (``CraterObstacles.bowl_edge_distance_m``, an approximation away from the rim crest)."""
+    count = trajectories.shape[0]
+    if craters is None or len(craters) == 0:
+        return np.zeros(count, dtype=bool)
+    distance = craters.bowl_edge_distance_m(trajectories[:, :, 0], trajectories[:, :, 1])
+    return (distance <= safety_m).any(axis=1)
+
+
 class DynamicWindowPlanner:
     """DWA with the expert configuration and the rover footprint."""
 
@@ -137,8 +149,9 @@ class DynamicWindowPlanner:
         return speeds, rates
 
     def command(self, pose: np.ndarray, velocity: tuple[float, float], route_m: np.ndarray, goal_m: np.ndarray,
-                obstacles: RockObstacles) -> LocalCommand:
-        """Twist at ``pose`` (east, north, yaw) moving at ``velocity`` (forward m/s, yaw rad/s) along ``route_m``."""
+                obstacles: RockObstacles, craters: CraterObstacles | None = None) -> LocalCommand:
+        """Twist at ``pose`` (east, north, yaw) moving at ``velocity`` (forward m/s, yaw rad/s) along ``route_m``,
+        refusing arcs that hit an obstacle rock or enter an obstacle-crater bowl."""
         configuration = self.configuration
         pose = np.asarray(pose, dtype=np.float64)
         distance_to_goal = float(math.hypot(goal_m[0] - pose[0], goal_m[1] - pose[1]))
@@ -152,7 +165,8 @@ class DynamicWindowPlanner:
         heading_error = np.abs(wrap_angle(np.arctan2(local_goal[1] - end[:, 1], local_goal[0] - end[:, 0]) - end[:, 2]))
         heading_cost = configuration.heading_cost_gain * heading_error
         speed_cost = configuration.speed_cost_gain * np.abs(speed_limit * np.exp(-heading_cost) - speed_grid)
-        refused = footprint_collides(trajectories, obstacles, self.footprint, configuration.obstacle_safety_m)
+        refused = footprint_collides(trajectories, obstacles, self.footprint, configuration.obstacle_safety_m) | \
+            crater_bowl_entered(trajectories, craters, configuration.obstacle_safety_m)
         total = np.where(refused, np.inf, heading_cost + speed_cost)
         if not np.isfinite(total).any():
             return LocalCommand(0.0, 0.0, local_goal, trajectories[:1, :1, :][0], True, len(total), int(refused.sum()))
@@ -166,6 +180,7 @@ class DynamicWindowPlanner:
                 rate * distance_to_goal / configuration.braking_distance_m
             damped_trajectory = predict_arcs(pose, np.array([speed]), np.array([damped]),
                                              configuration.prediction_horizon_s, configuration.prediction_step_s)
-            if not footprint_collides(damped_trajectory, obstacles, self.footprint, configuration.obstacle_safety_m)[0]:
+            if not (footprint_collides(damped_trajectory, obstacles, self.footprint, configuration.obstacle_safety_m)[0]
+                    or crater_bowl_entered(damped_trajectory, craters, configuration.obstacle_safety_m)[0]):
                 rate, trajectory = damped, damped_trajectory[0]      # the damped command is kept only when it is safe
         return LocalCommand(speed, rate, local_goal, trajectory, False, len(total), int(refused.sum()))

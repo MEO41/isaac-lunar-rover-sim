@@ -154,3 +154,85 @@ def test_expert_drives_a_kinematic_rover_through_rocks(expert_configuration, rov
     assert expert.state == "reached", (expert.state, expert.reason, pose)
     assert math.hypot(*(pose[:2] - expert.goal_m)) <= expert_configuration.stop_tolerance_m
     assert minimum_gap > footprint.width_m / 2
+
+
+# ---------------------------------------------------------------- obstacle craters (v1.0.5)
+
+def crater_table(rows: list[tuple[float, float, float]], harmonic_amplitude: float = 0.0, ellipticity: float = 1.0):
+    """CraterTable of craters (east, north, diameter), optionally with one rim harmonic and an ellipticity."""
+    from lunar_rover_sim.core.terrain.crater_population import HARMONIC_ORDERS, CraterTable
+    count, orders = len(rows), len(HARMONIC_ORDERS)
+    amplitudes = np.zeros((count, orders))
+    amplitudes[:, 0] = harmonic_amplitude
+    return CraterTable(np.array([r[0] for r in rows], float), np.array([r[1] for r in rows], float),
+                       np.array([r[2] for r in rows], float), np.full(count, 0.15), np.zeros(count),
+                       np.full(count, ellipticity), np.full(count, 0.4), amplitudes, np.full((count, orders), 0.3),
+                       np.zeros(count, dtype=np.int64), np.zeros(count, dtype=bool))
+
+
+def crater_world(craters, expert_configuration, rover_configuration, size_m: float = 16.0, **table_options):
+    """Planner map of flat ground with obstacle craters (east, north, diameter) and no rocks."""
+    grid = RegularGrid.centered(size_m, 0.05)
+    return build_planner_map(np.zeros(grid.shape, dtype=np.float32), grid, size_m / 2 - 1.0, RockObstacles.empty(),
+                             crater_table(craters, **table_options), expert_configuration,
+                             RoverFootprint.from_rover(rover_configuration))
+
+
+def test_bowl_edge_distance_agrees_with_the_crater_formula():
+    """Distance is zero exactly where the stamping formula has r' = 1, negative inside, (r' - 1) R everywhere."""
+    from lunar_rover_sim.core.planning.planner_map import CraterObstacles
+    from lunar_rover_sim.core.terrain.crater_stamping import normalised_crater_radius
+    table = crater_table([(1.0, -2.0, 3.0)], harmonic_amplitude=0.08, ellipticity=1.2)
+    craters = CraterObstacles.from_table(table, 1.5)
+    east, north = np.meshgrid(np.linspace(-4, 6, 101), np.linspace(-7, 3, 101))
+    expected = (normalised_crater_radius(east, north, table, 0) - 1.0) * 1.5
+    assert np.allclose(craters.bowl_edge_distance_m(east, north), expected, atol=1e-12)
+    small = CraterObstacles.from_table(crater_table([(0.0, 0.0, 1.0)]), 1.5)
+    assert len(small) == 0 and np.isinf(small.bowl_edge_distance_m(east, north)).all()
+
+
+def test_route_keeps_hard_clearance_from_a_crater_bowl(expert_configuration, rover_configuration):
+    """A crater on the straight line: the route keeps the rover centre the hard clearance away from the bowl."""
+    planner_map = crater_world([(0.0, 0.0, 3.0)], expert_configuration, rover_configuration)
+    assert len(planner_map.crater_obstacles) == 1
+    route = GlobalPlanner(planner_map, expert_configuration).plan((-5.0, 0.0), (5.0, 0.0))
+    assert route.reachable
+    distance = planner_map.crater_obstacles.bowl_edge_distance_m(route.path_m[:, 0], route.path_m[:, 1])
+    assert distance.min() >= planner_map.hard_clearance_m - 0.15          # 0.15: planner cell diagonal and smoothing
+
+
+def test_dynamic_window_refuses_driving_into_a_crater_bowl(expert_configuration, rover_configuration):
+    """Heading straight at a close bowl with the route through it: the chosen arc never enters the bowl."""
+    from lunar_rover_sim.core.planning.dynamic_window_planner import crater_bowl_entered
+    from lunar_rover_sim.core.planning.planner_map import CraterObstacles
+    planner = DynamicWindowPlanner(expert_configuration, RoverFootprint.from_rover(rover_configuration), 0.1)
+    craters = CraterObstacles.from_table(crater_table([(1.6, 0.0, 2.0)]), 1.5)
+    route = np.column_stack([np.linspace(0, 6, 61), np.zeros(61)])
+    command = planner.command(np.zeros(3), (0.3, 0.0), route, np.array([6.0, 0.0]), RockObstacles.empty(), craters)
+    trajectory = predict_arcs(np.zeros(3), np.array([command.forward_speed_m_s]), np.array([command.yaw_rate_rad_s]),
+                              expert_configuration.prediction_horizon_s, expert_configuration.prediction_step_s)
+    assert command.refused_count > 0
+    assert command.blocked or not crater_bowl_entered(trajectory, craters, expert_configuration.obstacle_safety_m)[0]
+    unaware = planner.command(np.zeros(3), (0.3, 0.0), route, np.array([6.0, 0.0]), RockObstacles.empty())
+    assert unaware.refused_count == 0                                      # without craters nothing is refused
+
+
+def test_expert_drives_a_kinematic_rover_past_craters(expert_configuration, rover_configuration):
+    """Closed loop with a lagged unicycle through a crater field: goal reached, the centre never enters a bowl."""
+    craters = [(0.0, 0.3, 3.0), (3.2, -1.8, 2.0), (-3.0, 1.6, 2.4), (2.5, 2.4, 1.6)]
+    planner_map = crater_world(craters, expert_configuration, rover_configuration, size_m=20.0)
+    period = 0.1
+    expert = ScriptedExpert(planner_map, expert_configuration, rover_configuration, period)
+    pose = np.array([-6.0, 0.0, 0.0])
+    assert expert.set_goal(pose, (6.0, 0.5)).reachable
+    velocity, minimum_distance = np.zeros(2), np.inf
+    for step in range(1200):
+        command = expert.command(step * period, pose, 0.0)
+        if command.state != "driving":
+            break
+        velocity += 0.5 * (np.array([command.forward_speed_m_s, command.yaw_rate_rad_s]) - velocity)   # actuator lag
+        pose = predict_arcs(pose, velocity[:1], velocity[1:], period, period)[0, -1]
+        minimum_distance = min(minimum_distance,
+                               float(planner_map.crater_obstacles.bowl_edge_distance_m(pose[:1], pose[1:2])[0]))
+    assert expert.state == "reached", (expert.state, expert.reason, pose)
+    assert minimum_distance > expert_configuration.obstacle_safety_m

@@ -2,6 +2,33 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-16 (night): v1.0.5, the expert keeps clear of crater bowls
+
+Found by the VLA layer (lunar-rover-vla, `tests/isaac/drive_expert_loop.py`, gpu_8gb, minsky RTX 5090): in 1 of 12
+PhysX episodes the expert's rover centre went 1 cm inside the rim crest of crater 2222 (2.6 m wide). Cause: bowls of
+obstacle craters were impassable only at the 0.2 m planner posts and not grown, and the DWA checked rocks only, so a
+corner cut could graze a bowl. Change:
+- **Planner map**: `CraterObstacles` (rows of craters >= `crater_obstacle_minimum_diameter_m`, table rows kept,
+  `bowl_edge_distance_m` = (r' - 1) x nominal radius, an APPROXIMATION that is exact on the rim crest). Bowls are grown
+  by the same hard clearance as rock discs (rover half width + side clearance = 0.47 m) and get the same
+  preferred-clearance ring. `PlannerMap.crater_obstacles` (new field, default empty).
+- **DWA**: `crater_bowl_entered` refuses arcs that bring the rover centre within `obstacle_safety_m` of a bowl; the
+  expert passes `PlannerMap.crater_obstacles`. `DynamicWindowPlanner.command(..., craters=None)` keeps the old
+  behaviour when no craters are given.
+- **Tests**: 4 new unit tests (22 total, all pass): distance equals the stamping formula with rim harmonics and
+  ellipticity, route keeps the hard clearance from a bowl, DWA refuses a bowl, kinematic expert through a crater field
+  never enters a bowl.
+- **Measured** (scene s7, 100 sampled goals from the spawn, kinematic lagged unicycle, contact = centre inside a bowl,
+  rock footprint overlap): v1.0.4 87 reached / 4 bowl contacts (all crater 2222) / 9 aborted, closest approach -0.002 m;
+  v1.0.5 90 reached / 0 contacts / 10 aborted, closest approach 0.62 m. Every abort in v1.0.5 is "stalled 4 times in
+  a row" 0.30-0.36 m from the goal (just outside `stop_tolerance_m` 0.3 m, final parking), not a hazard. PhysX through
+  the VLA environment: 19 of 19 completed episodes reached the goal (1.0 m radius), 0 hazard contacts, nearest hazard
+  0.31 m (a rock), nearest crater bowl 0.74 m. tests/isaac/smoke_scripted_expert.py: 3/3 goals reached, rock gap
+  >= 1.05 m, tilt <= 9.6 deg, 64 ms per control step with the camera; its `never_stopped_at_boundary` check failed
+  because the changed planner map changed the sampled goals and goal 1 was drawn exactly on the drivable edge
+  (east = -16.0 m): turning from there towards goal 2 swung the centre to -16.1 m. Goals on the edge were always
+  possible; the VLA layer samples goals at least 1.5 m inside the square.
+
 ## 2026-11-16 (evening): cast shadows switch, exact resets
 
 - **`set_cast_shadows(stage, enabled)`** (`scene_stage_builder`): `primvars:doNotCastShadows` on every terrain, rock

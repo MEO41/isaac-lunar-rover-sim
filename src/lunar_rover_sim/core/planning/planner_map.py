@@ -4,13 +4,16 @@ Design after MARE's ``planner_maps.py`` (GNC-Moon-Simulator): travel cost per ce
 table, cells steeper than a threshold are impassable, the cost is smoothed over 3 x 3 cells, drivable regions are
 4-connected components. Privileged additions of this project: rocks standing higher than ``rock_obstacle_height_m``
 (their exposed height and footprint measured from the placed collider meshes) and the bowls of large craters are
-impassable, and so is everything outside the drivable square of the session.
+impassable, both grown by the same hard clearance (rover half width + side clearance) and surrounded by the same
+preferred-clearance ring, and so is everything outside the drivable square of the session.
 
 Units: metres, degrees. Arrays are indexed [row = north, column = east] like every lattice of the project.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy import ndimage
@@ -19,8 +22,7 @@ from lunar_rover_sim.core.configuration.configuration_models import ExpertConfig
 from lunar_rover_sim.core.data_model.regular_grid import RegularGrid, triangulated_height
 from lunar_rover_sim.core.frames.pose_math import rotation_matrix_from_quaternion
 from lunar_rover_sim.core.scene.scene_rasters import slope_over_baseline_deg
-from lunar_rover_sim.core.terrain.crater_population import CraterTable
-from lunar_rover_sim.core.terrain.crater_stamping import normalised_crater_radius
+from lunar_rover_sim.core.terrain.crater_population import HARMONIC_ORDERS, CraterTable
 
 FOUR_CONNECTED = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
 
@@ -50,6 +52,82 @@ class RockObstacles:
 
 
 @dataclass(frozen=True)
+class CraterObstacles:
+    """Craters whose bowl (inside the rim crest) the expert never enters, one row per crater (table rows kept)."""
+
+    table_row: np.ndarray
+    center_east_m: np.ndarray
+    center_north_m: np.ndarray
+    radius_m: np.ndarray
+    ellipticity: np.ndarray
+    orientation_rad: np.ndarray
+    harmonic_amplitudes: np.ndarray
+    harmonic_phases_rad: np.ndarray
+
+    def __len__(self) -> int:
+        """Number of obstacle craters."""
+        return len(self.table_row)
+
+    @classmethod
+    def empty(cls) -> "CraterObstacles":
+        """No obstacle craters."""
+        orders = len(HARMONIC_ORDERS)
+        return cls(np.zeros(0, dtype=np.int64), *(np.zeros(0) for _ in range(5)), np.zeros((0, orders)),
+                   np.zeros((0, orders)))
+
+    @classmethod
+    def from_table(cls, table: CraterTable | None, minimum_diameter_m: float) -> "CraterObstacles":
+        """Craters of the table at least ``minimum_diameter_m`` wide."""
+        if table is None or not len(table):
+            return cls.empty()
+        rows = np.flatnonzero(np.asarray(table.diameter_m) >= minimum_diameter_m)
+        return cls(rows.astype(np.int64), np.asarray(table.center_east_m, dtype=np.float64)[rows],
+                   np.asarray(table.center_north_m, dtype=np.float64)[rows],
+                   np.asarray(table.diameter_m, dtype=np.float64)[rows] / 2.0,
+                   np.asarray(table.ellipticity, dtype=np.float64)[rows],
+                   np.asarray(table.orientation_rad, dtype=np.float64)[rows],
+                   np.asarray(table.harmonic_amplitudes, dtype=np.float64)[rows],
+                   np.asarray(table.harmonic_phases_rad, dtype=np.float64)[rows])
+
+    def normalised_radius(self, index: int, east_m: np.ndarray, north_m: np.ndarray) -> np.ndarray:
+        """r' of crater ``index`` at points (formula of ``core.terrain.crater_stamping.normalised_crater_radius``);
+        r' <= 1 is inside the bowl."""
+        offset_east = np.asarray(east_m, dtype=np.float64) - self.center_east_m[index]
+        offset_north = np.asarray(north_m, dtype=np.float64) - self.center_north_m[index]
+        cosine, sine = math.cos(self.orientation_rad[index]), math.sin(self.orientation_rad[index])
+        along = offset_east * cosine + offset_north * sine
+        across = (-offset_east * sine + offset_north * cosine) / self.ellipticity[index]
+        rho = np.hypot(along, across)
+        theta = np.arctan2(across, along)
+        modulation = np.ones_like(rho)
+        for order_index, order in enumerate(HARMONIC_ORDERS):
+            modulation += self.harmonic_amplitudes[index, order_index] * np.cos(
+                order * theta + self.harmonic_phases_rad[index, order_index])
+        return rho / (self.radius_m[index] * modulation)
+
+    def bowl_edge_distance_m(self, east_m: np.ndarray, north_m: np.ndarray) -> np.ndarray:
+        """Distance (m) from each point to the nearest bowl edge, negative inside; inf without craters.
+
+        APPROXIMATION: (r' - 1) x nominal radius; exact for a circular crater without rim harmonics, and zero exactly
+        on the rim crest (r' = 1) for every crater. Craters whose bowl cannot come within 2 m of any point are skipped
+        (bounding radius: nominal radius x max(1, ellipticity) x (1 + sum of harmonic amplitudes))."""
+        east_m = np.asarray(east_m, dtype=np.float64)
+        north_m = np.asarray(north_m, dtype=np.float64)
+        distance = np.full(east_m.shape, np.inf)
+        if len(self) == 0 or east_m.size == 0:
+            return distance
+        bounding = self.radius_m * np.maximum(1.0, self.ellipticity) * (1.0 + np.abs(self.harmonic_amplitudes).sum(axis=1))
+        low_east, high_east = float(east_m.min()), float(east_m.max())
+        low_north, high_north = float(north_m.min()), float(north_m.max())
+        outside_east = np.maximum(np.maximum(low_east - self.center_east_m, self.center_east_m - high_east), 0.0)
+        outside_north = np.maximum(np.maximum(low_north - self.center_north_m, self.center_north_m - high_north), 0.0)
+        for index in np.flatnonzero(np.hypot(outside_east, outside_north) <= bounding + 2.0):
+            distance = np.minimum(distance, (self.normalised_radius(int(index), east_m, north_m) - 1.0)
+                                  * self.radius_m[index])
+        return distance
+
+
+@dataclass(frozen=True)
 class RoverFootprint:
     """Rectangle around the rover centre (wheel contact rectangle plus tyres), metres."""
 
@@ -75,6 +153,7 @@ class PlannerMap:
     rock_obstacles: RockObstacles
     hard_clearance_m: float
     drivable_half_size_m: float
+    crater_obstacles: CraterObstacles = field(default_factory=CraterObstacles.empty)
 
     def cell_of(self, east_m: float, north_m: float) -> tuple[int, int]:
         """(row, column) of the nearest planner post; raises ValueError outside the lattice."""
@@ -145,9 +224,10 @@ def build_planner_map(collision_height_m: np.ndarray, collision_grid: RegularGri
                       configuration: ExpertConfiguration, footprint: RoverFootprint) -> PlannerMap:
     """Cost, impassable cells and regions on the planner lattice (the collision lattice subsampled).
 
-    Impassable: slope (maximum over the planner cell) above the threshold, rock discs grown by half the rover width
-    plus the side clearance, bowls of craters at least ``crater_obstacle_minimum_diameter_m`` wide, and cells outside
-    the drivable square. ``clearance_ring`` marks the preferred extra margin around rocks (closed when possible)."""
+    Impassable: slope (maximum over the planner cell) above the threshold, rock discs and the bowls of craters at
+    least ``crater_obstacle_minimum_diameter_m`` wide, both grown by half the rover width plus the side clearance
+    (v1.0.5; before, bowls were not grown and the rover centre could graze a rim crest), and cells outside the
+    drivable square. ``clearance_ring`` marks the preferred extra margin around rocks and bowls (closed when possible)."""
     decimation = int(round(configuration.planner_spacing_m / collision_grid.spacing_m))
     if decimation < 1 or abs(decimation * collision_grid.spacing_m - configuration.planner_spacing_m) > 1e-9:
         raise ValueError(f"planner_spacing_m {configuration.planner_spacing_m} is not a multiple of the collision "
@@ -162,18 +242,19 @@ def build_planner_map(collision_height_m: np.ndarray, collision_grid: RegularGri
     hard_clearance = footprint.width_m / 2 + configuration.route_side_clearance_m
     rock_distance = distance_to_rock_discs(east, north, rock_obstacles)
     impassable |= rock_distance <= hard_clearance
-    clearance_ring = (rock_distance > hard_clearance) & (rock_distance <= hard_clearance + configuration.preferred_clearance_m)
-    if crater_table is not None and len(crater_table):
-        large = np.flatnonzero(crater_table.diameter_m >= configuration.crater_obstacle_minimum_diameter_m)
-        for index in large:
-            impassable |= normalised_crater_radius(east, north, crater_table, int(index)) <= 1.0
+    crater_obstacles = CraterObstacles.from_table(crater_table, configuration.crater_obstacle_minimum_diameter_m)
+    crater_distance = crater_obstacles.bowl_edge_distance_m(east, north)
+    impassable |= crater_distance <= hard_clearance
+    obstacle_distance = np.minimum(rock_distance, crater_distance)
+    clearance_ring = (obstacle_distance > hard_clearance) & \
+        (obstacle_distance <= hard_clearance + configuration.preferred_clearance_m)
 
     cost = slope_cost(slope, configuration)
     cost[impassable] = 2.0 * configuration.slope_threshold_deg
     cost = ndimage.uniform_filter(cost, size=3, mode="nearest")
     regions, _ = ndimage.label(~impassable, structure=FOUR_CONNECTED)
     return PlannerMap(grid, slope.astype(np.float32), cost, impassable, clearance_ring & ~impassable, regions,
-                      rock_obstacles, hard_clearance, drivable_half_size_m)
+                      rock_obstacles, hard_clearance, drivable_half_size_m, crater_obstacles)
 
 
 def planner_map_from_scene(scene, configuration: ExpertConfiguration | None = None) -> PlannerMap:
