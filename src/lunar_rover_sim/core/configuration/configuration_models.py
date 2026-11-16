@@ -398,6 +398,21 @@ class WindowConfiguration(StrictModel):
     keyboard_yaw_rate_rad_s: float
 
 
+class AppearanceConfiguration(StrictModel):
+    """Which regolith look the renderer uses (runtime only; physics never changes).
+
+    native                  this project's lunar_surface.mdl + baked textures; live wheel tracks with mask shading.
+    lunar_regolith_overlay  lunar_regolith field-driven material bound to this project's terrain meshes; live wheel
+                            ruts (geometry) still work, the track mask shading does not (the upstream MDL has none).
+    lunar_regolith_scene    lunar_regolith render scene over the workspace (micro-relief, clods, static imprints);
+                            this project's workspace render tiles are hidden, live ruts are not drawn.
+    Both lunar_regolith modes need scripts/build_regolith_appearance.py first (SYNTHETIC soil, ASSUMED mapping)."""
+
+    source: Literal["native", "lunar_regolith_overlay", "lunar_regolith_scene"]
+    quality: Literal["realtime", "balanced", "offline"]
+    tag: str
+
+
 class SimulatorConfiguration(StrictModel):
     """The whole resolved configuration."""
 
@@ -419,3 +434,4 @@ class SimulatorConfiguration(StrictModel):
     lighting: LightingConfiguration
     render: RenderConfiguration
     window: WindowConfiguration
+    appearance: AppearanceConfiguration

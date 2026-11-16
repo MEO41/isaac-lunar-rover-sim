@@ -1,0 +1,3 @@
+[submodule "external/lunar_regolith"]
+	path = external/lunar_regolith
+	url = https://github.com/MEO41/lunar_regolith

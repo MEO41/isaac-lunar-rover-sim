@@ -24,6 +24,19 @@ Code lives here. Every generated file goes under the data root on DISK02
 DISK02 is auto-mounted at login and not in fstab: entry points call `require_data_root()` and refuse to fall back to
 the root disk (which is ~97 % full). DEM files are referenced read-only from `lunar_regolith/data/nac_dem`, never copied.
 
+## lunar_regolith appearance (user instruction)
+
+- `external/lunar_regolith` is a pinned git submodule. Never edit files inside it; changes go upstream in its own
+  repository/session. Bump the pin deliberately when newer features are needed.
+- Large data is not in git: `.env.local` sets REGOLITH_REPOSITORY, REGOLITH_PYTHON, REGOLITH_RUN (working copy).
+- Build appearance with `scripts/regolith_run.sh scripts/build_regolith_appearance.py` (REGOLITH_PYTHON, submodule code
+  first on PYTHONPATH), never with Isaac's Python. Record the lunar_regolith commit in every result (provenance.json).
+- Pass this simulator's surface as `SceneSpec.surface` (the workspace collision lattice); render meshes stay
+  render-only; colliders, rocks and the rover stay ours. Upstream render-only rocks/micro-craters stay off.
+- Ruts for lunar_regolith scenes are `SurfaceImprint` plates from a contact log (static per build).
+- One heavy scene per Isaac process; never PathTracing with totalSpp 0.
+- Appearance is SYNTHETIC soil through an ASSUMED mapping; label it so.
+
 ## Commands
 
 ```bash

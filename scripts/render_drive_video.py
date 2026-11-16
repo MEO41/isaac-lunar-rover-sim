@@ -117,6 +117,8 @@ try:
               "wall_seconds": round(elapsed, 1), "encoded": encoded, "resolution": [width, height],
               "front_resolution": list(front_resolution), "end_position_m": final.position_m.tolist(),
               "track_field": session.track_runtime.field.rut_depth_statistics(),
+              "appearance": configuration.appearance.model_dump(),
+              "appearance_provenance": session.terrain_handles.regolith_appearance,
               "sun": {"azimuth_deg": configuration.lighting.sun_azimuth_deg,
                       "elevation_deg": configuration.lighting.sun_elevation_deg}}
     (run_directory / "result.json").write_text(json.dumps(result, indent=1))

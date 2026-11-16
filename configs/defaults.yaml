@@ -249,3 +249,8 @@ window:
   onboard_cameras_enabled: false
   keyboard_forward_speed_m_s: 0.4
   keyboard_yaw_rate_rad_s: 0.6
+
+appearance:                               # runtime only (see AppearanceConfiguration)
+  source: native                          # native | lunar_regolith_overlay | lunar_regolith_scene
+  quality: realtime                       # lunar_regolith quality preset of the built appearance
+  tag: ""                                 # scene mode: selects regolith_appearance/scene_<quality>_<tag>

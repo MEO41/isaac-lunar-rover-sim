@@ -122,7 +122,8 @@ try:
               "sun_elevation_deg": configuration.lighting.sun_elevation_deg, "samples": len(session.track_runtime.contact_log),
               "field": statistics, "timings_ms_total": session.track_runtime.timings_ms,
               "control_step_ms_mean": 1000 * float(np.mean(step_times)), "video_memory_mib": process_video_memory_mib(),
-              "start": {"settled_height_error_m": report.settled_height_error_m}}
+              "start": {"settled_height_error_m": report.settled_height_error_m},
+              "appearance_provenance": session.terrain_handles.regolith_appearance}
     sinkages = np.array([sample.sinkage_m for sample in session.track_runtime.contact_log])
     if len(sinkages):
         result["sinkage_m"] = {"median": float(np.median(sinkages)), "minimum": float(sinkages.min()),

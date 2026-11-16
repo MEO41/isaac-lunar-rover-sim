@@ -21,6 +21,46 @@ shadows, and the North and South Massifs (real DTM heights) on the horizon.
 *Camera glare (`render.sun_glare`): glare off, then bloom scale 0.15 / 0.3 / 0.6 (default). Only the Sun blooms; the
 terrain brightness is unchanged.*
 
+## Regolith appearance from lunar_regolith
+
+The regolith look can come from the field-driven appearance module of
+[lunar_regolith](https://github.com/MEO41/lunar_regolith) (pinned submodule `external/lunar_regolith`). There, the
+rendered surface is a function of SYNTHETIC soil fields (density, compaction, cohesion, grain size, thickness, facies)
+through an ASSUMED mapping (`config/appearance.yaml`); it is not calibrated against Apollo photographs.
+
+![regolith appearance comparison](docs/images/regolith_appearance_comparison.png)
+
+*Same drive, same views. Rows: native look, lunar_regolith overlay, lunar_regolith render scene. Columns: oblique,
+close, grazing. Physics (colliders, rover, rocks) is identical in all three.*
+
+| `appearance.source` | What renders | Wheel ruts |
+|---|---|---|
+| `native` (default) | this project's `lunar_surface.mdl` + baked textures | live: mesh deformation with grouser imprint + track-mask shading |
+| `lunar_regolith_overlay` | lunar_regolith material bound to this project's terrain meshes | live mesh deformation (no mask shading: the upstream MDL has none) |
+| `lunar_regolith_scene` | lunar_regolith render scene over the workspace: micro-relief, clods, imprint patch | static: a drive's contact log turned into `SurfaceImprint` plates |
+
+```bash
+# needs REGOLITH_REPOSITORY, REGOLITH_PYTHON, REGOLITH_RUN in .env.local (see .env.example); git submodule update --init
+scripts/regolith_run.sh scripts/build_regolith_appearance.py --preset gpu_8gb --mode overlay --quality realtime
+scripts/isaac_run.sh scripts/render_appearance_views.py --label native --save-contact-log --output-directory DIR
+scripts/regolith_run.sh scripts/build_regolith_appearance.py --preset gpu_8gb --mode scene --quality balanced \
+    --contact-log DIR/contact_log.npz --tag drive
+scripts/isaac_run.sh --interactive scripts/view_scene.py --preset gpu_8gb --set appearance.source=lunar_regolith_overlay
+```
+
+How it is wired:
+- The builder runs with `REGOLITH_PYTHON` (rasterio, pyproj), never Isaac's Python; the code comes from the pinned
+  submodule, the data from the working copy's `REGOLITH_RUN`. Both commits go into `provenance.json`, which every
+  result JSON copies.
+- The render surface handed to lunar_regolith is this simulator's 5 cm workspace **collision lattice**
+  (`SceneSpec.surface`), so its render meshes refine exactly the surface PhysX collides with. Render meshes carry no
+  collision API; terrain colliders, rocks and the rover are unchanged.
+- Upstream render-only rocks and micro-craters are switched off (this simulator has collided rocks and a physical
+  crater population; render-only ones would be ghosts the wheels pass through); dust is off.
+- Each appearance renders in its own Isaac process (Isaac Sim 6.0.1 runs out of RTX resource descriptors otherwise).
+- Known limit of static imprints: ruts are chains of circular plates (faint rings where plate depths differ, no
+  grouser bars) and appear all at once; time-varying ruts are not implemented upstream yet.
+
 ## What it does
 
 - **Terrain from LROC NAC DTMs** (Apollo 17, 2 m + 5 m mosaic) in a true-metre local frame, nested tiers out to the

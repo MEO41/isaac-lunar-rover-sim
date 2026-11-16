@@ -79,8 +79,10 @@ class TrackRuntime:
         self.sampling_enabled = False
         self.queue = []
         self.contact_log = []
-        self.geometry_enabled = tracks.visual_mode in ("geometry_and_mask", "geometry_only")
-        self.mask_enabled = tracks.visual_mode in ("geometry_and_mask", "mask_only")
+        source = configuration.appearance.source
+        self.geometry_enabled = tracks.visual_mode in ("geometry_and_mask", "geometry_only") and \
+            source != "lunar_regolith_scene"          # scene mode hides the tiles; ruts come as static imprints
+        self.mask_enabled = tracks.visual_mode in ("geometry_and_mask", "mask_only") and source == "native"
         self.last_mask_upload_wall_s = -1e9
         self.timings_ms = {"sampling": 0.0, "stamping": 0.0, "tile_writes": 0.0, "mask_upload": 0.0}
         self.tile_attributes = {}
@@ -169,6 +171,13 @@ class TrackRuntime:
         self.mask_provider.set_data_array(image, [image.shape[1], image.shape[0]])
         self.last_mask_upload_wall_s = time.perf_counter()
         self.timings_ms["mask_upload"] += 1000 * (self.last_mask_upload_wall_s - started)
+
+    def save_contact_log(self, path) -> None:
+        """Write every emitted wheel contact sample (npz) - input of static lunar_regolith imprints."""
+        log = self.contact_log
+        np.savez(path, **{name: np.array([getattr(sample, name) for sample in log]) for name in
+                          ("time_s", "wheel_index", "contact_east_m", "contact_north_m", "heading_rad", "sinkage_m",
+                           "wheel_angle_rad", "normal_force_n", "slip_ratio")})
 
     def clear(self) -> None:
         """Erase all tracks and restore the rest surface on the touched tiles."""

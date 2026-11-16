@@ -40,6 +40,7 @@ class TerrainStageHandles:
     collision_tile_paths: list[str] = field(default_factory=list)
     surface_material_path: str = "/World/Looks/LunarSurface"
     triangle_counts: dict[str, int] = field(default_factory=dict)
+    regolith_appearance: dict | None = None
 
 
 def create_stage():
@@ -121,13 +122,18 @@ def _mesh_arrays_for_cells(grid: RegularGrid, heights: np.ndarray, cells_kept: n
     return points, triangles, normals, points[:, :2].copy()
 
 
-def build_terrain_prims(stage, scene: LoadedScene) -> TerrainStageHandles:
-    """Author every terrain tier; returns handles of the workspace tiles for later updates."""
+def build_terrain_prims(stage, scene: LoadedScene, bind_materials: bool = True) -> TerrainStageHandles:
+    """Author every terrain tier; returns handles of the workspace tiles for later updates.
+
+    ``bind_materials=False`` leaves the render binding to a lunar_regolith overlay sublayer (a binding in the root
+    layer would be stronger than the sublayer and hide it)."""
     layout = scene.layout
     handles = TerrainStageHandles()
     terrain_root = UsdGeom.Xform.Define(stage, "/World/Terrain")
     set_semantic_class(terrain_root.GetPrim(), "regolith")
     UsdGeom.Scope.Define(stage, "/World/Terrain/Workspace")
+    UsdGeom.Scope.Define(stage, "/World/Terrain/Workspace/Visual")      # imageable parents: visibility inherits
+    UsdGeom.Scope.Define(stage, "/World/Terrain/Workspace/Collision")
 
     visual_grid = layout.workspace_visual_grid
     heights = scene.workspace_height_m.astype(np.float64)
@@ -142,7 +148,8 @@ def build_terrain_prims(stage, scene: LoadedScene) -> TerrainStageHandles:
         mesh = define_triangle_mesh(stage, path, points, tile_triangles,
                                     normals=normals[tile.array_slice()].reshape(-1, 3),
                                     texture_coordinates=points[:, :2])
-        bind_render_material(mesh.GetPrim(), handles.surface_material_path)
+        if bind_materials:
+            bind_render_material(mesh.GetPrim(), handles.surface_material_path)
         handles.visual_tile_paths[key] = path
         handles.visual_tiles[key] = tile
         triangle_total += len(tile_triangles)
@@ -173,7 +180,8 @@ def build_terrain_prims(stage, scene: LoadedScene) -> TerrainStageHandles:
             grid, arrays[f"{key}_height_m"].astype(np.float64), arrays.get(f"{key}_cells_kept"))
         mesh = define_triangle_mesh(stage, f"/World/Terrain/{prim_name}", points, triangles, tier_normals,
                                     texture_coordinates)
-        bind_render_material(mesh.GetPrim(), material_path)
+        if bind_materials or prim_name == "Backdrop":
+            bind_render_material(mesh.GetPrim(), material_path)
         if collided:
             make_static_triangle_collider(mesh.GetPrim(), REGOLITH_PHYSICS_MATERIAL)
         handles.triangle_counts[key] = len(triangles)
@@ -195,12 +203,58 @@ def build_lighting(stage, scene: LoadedScene, azimuth_deg: float | None = None, 
     xformable.AddRotateYOp().Set(float(90.0 - elevation))
 
 
+REGOLITH_APPEARANCE_ROOT = "/World/RegolithAppearance"
+REGOLITH_SCENE_PRIMS_TO_DEACTIVATE = ("Cameras", "Lights", "Dust", "Scatter/Rocks", "Terrain/Collision")
+
+
+def regolith_appearance_directory(scene: LoadedScene) -> Path:
+    """Directory of the lunar_regolith appearance selected by the configuration (raises if it was not built)."""
+    appearance = scene.configuration.appearance
+    mode = "overlay" if appearance.source == "lunar_regolith_overlay" else "scene"
+    name = f"{mode}_{appearance.quality}" + (f"_{appearance.tag}" if appearance.tag and mode == "scene" else "")
+    directory = scene.directory / "regolith_appearance" / name
+    if not (directory / "provenance.json").exists():
+        raise FileNotFoundError(
+            f"lunar_regolith appearance {directory} is not built. Run:\n  scripts/regolith_run.sh "
+            f"scripts/build_regolith_appearance.py --preset {scene.configuration.profile.preset} --mode {mode} "
+            f"--quality {appearance.quality}" + (f" --tag {appearance.tag}" if appearance.tag and mode == "scene" else ""))
+    return directory
+
+
+def apply_regolith_appearance(stage, scene: LoadedScene, handles: TerrainStageHandles) -> dict:
+    """Overlay mode: sublayer the binding overlay. Scene mode: reference the render scene, hide the workspace tiles.
+
+    Physics is untouched in both modes (no collider is added; terrain colliders and the rover stay as built)."""
+    import json
+    source = scene.configuration.appearance.source
+    directory = regolith_appearance_directory(scene)
+    provenance = json.loads((directory / "provenance.json").read_text())
+    if source == "lunar_regolith_overlay":
+        stage.GetRootLayer().subLayerPaths.insert(0, str(directory / "appearance_overlay.usda"))
+        handles.surface_material_path = provenance["material_path"]
+    else:
+        root = UsdGeom.Xform.Define(stage, REGOLITH_APPEARANCE_ROOT)
+        root.GetPrim().GetReferences().AddReference(str(directory / "scene.usd"), "/World")
+        for relative in REGOLITH_SCENE_PRIMS_TO_DEACTIVATE:
+            prim = stage.GetPrimAtPath(f"{REGOLITH_APPEARANCE_ROOT}/{relative}")
+            if prim and prim.IsValid():
+                prim.SetActive(False)
+        set_semantic_class(root.GetPrim(), "regolith")
+        for tile_path in handles.visual_tile_paths.values():     # hidden one by one (they would z-fight the render meshes)
+            UsdGeom.Imageable(stage.GetPrimAtPath(tile_path)).MakeInvisible()
+    return provenance
+
+
 def build_scene_stage(scene: LoadedScene, include_rocks: bool = True) -> tuple[object, TerrainStageHandles]:
-    """Create the stage and author physics, materials, terrain, rocks (if baked) and the Sun."""
+    """Create the stage and author physics, materials, terrain, rocks (if baked), regolith appearance and the Sun."""
     stage = create_stage()
     build_physics_scene(stage, scene)
     build_surface_materials(stage, scene)
-    handles = build_terrain_prims(stage, scene)
+    native = scene.configuration.appearance.source == "native"
+    handles = build_terrain_prims(stage, scene, bind_materials=native or
+                                  scene.configuration.appearance.source == "lunar_regolith_scene")
+    if not native:
+        handles.regolith_appearance = apply_regolith_appearance(stage, scene, handles)
     if include_rocks and "rocks" in scene.extra_arrays:
         from lunar_rover_sim.runtime.stage_assembly.rock_stage_builder import build_rock_prims
         build_rock_prims(stage, scene)

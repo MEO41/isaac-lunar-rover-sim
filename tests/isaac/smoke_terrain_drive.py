@@ -55,7 +55,8 @@ try:
                                 enable_tracks=False if arguments.no_tracks else None)
     report = session.start()
     result = {"scene": str(scene_directory), "preset": arguments.preset, "start": report.__dict__,
-              "video_memory_after_start_mib": process_video_memory_mib(), "checks": {}}
+              "video_memory_after_start_mib": process_video_memory_mib(), "checks": {},
+              "appearance_provenance": session.terrain_handles.regolith_appearance}
 
     spawn = np.array(session.spawn_pose.position_m)
     heading = session.spawn_pose.heading_rad
@@ -93,8 +94,13 @@ try:
             world = (rotation_matrix_from_quaternion(rock_table.orientation_xyzw[index]) @
                      (vertices.astype(np.float64) * rock_table.diameter_m[index]).T).T + rock_table.position_m[index]
             center = world.mean(axis=0)
-            near = np.hypot(world[:, 0] - center[0], world[:, 1] - center[1]) < 0.15 * rock_table.diameter_m[index]
-            expected_top = float(world[near, 2].max()) if near.any() else float(world[:, 2].max())
+            # Exact top of the convex hull on the vertical line through the centroid: for facet planes
+            # a.p + b <= 0, the highest z on the line is min over upward facets of -(b + a_x x + a_y y) / a_z.
+            from scipy.spatial import ConvexHull
+            planes = ConvexHull(world).equations
+            upward = planes[:, 2] > 1e-9
+            expected_top = float(np.min(-(planes[upward, 3] + planes[upward, 0] * center[0]
+                                          + planes[upward, 1] * center[1]) / planes[upward, 2]))
             hit = query.raycast_closest(carb.Float3(float(center[0]), float(center[1]), float(world[:, 2].max()) + 2.0),
                                         carb.Float3(0.0, 0.0, -1.0), 10.0)
             rock_check["checked"] += 1

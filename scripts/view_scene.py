@@ -1,6 +1,7 @@
 """Drive the rover with the keyboard in an Isaac Sim window.
 
     scripts/isaac_run.sh --interactive scripts/view_scene.py [--preset gpu_8gb] [--sun-elevation-deg 15]
+        [--set appearance.source=lunar_regolith_overlay]
 
 Keys (click into the viewport first): W/S or Up/Down drive, A/D or Left/Right turn, Shift = x2, X = stop,
 R = reset to the spawn pose and clear tracks, T = clear tracks, C = cycle camera (follow -> rover front -> free),
@@ -25,8 +26,10 @@ parser.add_argument("--sun-elevation-deg", type=float, default=None)
 parser.add_argument("--sun-azimuth-deg", type=float, default=None)
 parser.add_argument("--no-tracks", action="store_true")
 parser.add_argument("--no-rocks", action="store_true")
+parser.add_argument("--set", dest="extra_overrides", action="append", default=[],
+                    help="dotted configuration override, e.g. appearance.source=lunar_regolith_overlay")
 arguments = parser.parse_args()
-overrides = ["drive.fall_through_policy=recover"]
+overrides = ["drive.fall_through_policy=recover", *arguments.extra_overrides]
 if arguments.sun_elevation_deg is not None:
     overrides.append(f"lighting.sun_elevation_deg={arguments.sun_elevation_deg}")
 if arguments.sun_azimuth_deg is not None:
