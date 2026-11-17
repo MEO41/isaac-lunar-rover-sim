@@ -63,4 +63,6 @@ scripts/isaac_run.sh --interactive scripts/view_scene.py --preset smoke  # drive
 7. Report only tests that were actually run, with the numbers.
 8. Git: `origin` = https://github.com/MEO41/isaac-lunar-rover-sim (branch `main`). Commit or push only when the
    user asks. Never commit `.env.local`, DEM data or anything from the data root.
-9. One Isaac process at a time (8 GB GPU); always launch through `scripts/isaac_run.sh`.
+9. Always launch Isaac through `scripts/isaac_run.sh`. One Isaac process at a time by default; on minsky (RTX 5090)
+   up to 3 in parallel with `ISAAC_PARALLEL_SLOTS=3` (user decision 2026-11-17; each process needs ~5 GB of video
+   memory and ~11 CPU cores, so 3 processes give ~1.4x the throughput of one). The old RTX 5060 stays at 1.

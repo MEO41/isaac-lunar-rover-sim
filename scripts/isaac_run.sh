@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Launch one Isaac Sim script of this project with guards and a start-up watchdog.
 #   scripts/isaac_run.sh [--interactive] [--timeout SECONDS] [--data-root PATH] <script.py> [script arguments]
-# 1 data-root check (same Python module as every entry point)  2 one Isaac process of this project at a time (flock)
+# 1 data-root check (same Python module as every entry point)  2 at most ISAAC_PARALLEL_SLOTS Isaac processes of this
+#   project at a time (flock on one lock file per slot; default 1 = the original rule; minsky, RTX 5090: up to 3)
 # 3 free video memory / root disk floors  4 cache redirects to the data root  5 stale /dev/shm cleanup
 # 6 launch with stdin closed, log under <data root>/runs/logs  7 relaunch if the log stays empty for 75 s (3 attempts)
 set -uo pipefail
@@ -26,8 +27,19 @@ export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 ROOT="$("$ISAAC_ENV/bin/python" -m lunar_rover_sim.core.storage.data_root --require "${DATA_ROOT_ARGUMENT[@]}")" || exit 4
 export LUNAR_ROVER_SIM_DATA_ROOT="$ROOT"
 
-exec 9>"$ROOT/runs/isaac.lock"
-if ! flock -n 9; then echo "ERROR: another Isaac process of this project holds $ROOT/runs/isaac.lock" >&2; exit 5; fi
+SLOTS="${ISAAC_PARALLEL_SLOTS:-1}"
+case "$SLOTS" in ''|*[!0-9]*|0) echo "ERROR: ISAAC_PARALLEL_SLOTS must be a positive integer, got '$SLOTS'" >&2; exit 2 ;; esac
+SLOT=""
+for index in $(seq 0 $((SLOTS - 1))); do
+  LOCK="$ROOT/runs/isaac.lock"; [ "$index" -gt 0 ] && LOCK="$ROOT/runs/isaac.lock.$index"
+  exec 9>"$LOCK"
+  if flock -n 9; then SLOT="$index"; break; fi
+  exec 9>&-
+done
+if [ -z "$SLOT" ]; then
+  echo "ERROR: all $SLOTS Isaac slots of this project are busy ($ROOT/runs/isaac.lock*)" >&2; exit 5
+fi
+[ "$SLOTS" -gt 1 ] && echo "isaac_run: slot $SLOT of $SLOTS"
 
 FREE_VRAM_MIB="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')"
 if [ "${FREE_VRAM_MIB:-0}" -lt "${MINIMUM_FREE_VIDEO_MEMORY_MIB:-2500}" ]; then

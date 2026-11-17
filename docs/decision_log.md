@@ -2,6 +2,16 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-17: v1.0.7, parallel Isaac processes on minsky
+
+User decision: the "one Isaac process at a time" rule came from the 8 GB RTX 5060; on minsky (RTX 5090, 32 GB) several
+processes may run. `scripts/isaac_run.sh` takes the first free of `ISAAC_PARALLEL_SLOTS` lock files
+(`runs/isaac.lock`, `runs/isaac.lock.1`, ...; default 1 = unchanged behaviour); the free-video-memory floor still
+guards every start. Measured (minsky, VLA collection runner, scripted expert, 3 scenes at once): each process 7.3-7.6
+control steps/s once all were running (one 3.9 while the others started), together about 19 control steps/s against
+13.7 for one process alone, i.e. about 1.4x; each process keeps about 11 of the 32 CPU cores busy, so the CPU, not
+the GPU (about 5 GB per process), limits further gains. All 6 test episodes reached the goal.
+
 ## 2026-11-16 (night, later): v1.0.6, three more landing sites
 
 Requested for the VLA layer (test the rover beyond the Apollo 17 valley). Config only, no code change.
