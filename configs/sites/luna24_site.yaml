@@ -1,0 +1,15 @@
+# Luna 24 landing site, southeastern Mare Crisium.
+# DTM: LROC NAC DTM LUNA24 (2 m/post, equirectangular, standard parallel 13.0 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/LUNA24/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to Luna 24 lander at 62.2129 E, 12.7145 N (target box: mean 4.32, max 24.19 deg)
+# (ASSUMPTION: published position, approximate to a few metres), found with scripts/find_flat_site_origin.py:
+# 10.0 m from the target, 40 m box mean / max slope 2.76 / 8.43 deg, regional-tier DTM coverage 1.000.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: luna24_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_LUNA24.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_LUNA24.TIF
+  origin_longitude_deg: 62.21256
+  origin_latitude_deg: 12.71453
+  standard_parallel_deg: 13.0
+  dem_cutoff_wavelength_m: 8.0

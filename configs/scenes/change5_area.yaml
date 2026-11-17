@@ -1,0 +1,8 @@
+# Scene at the change5_site origin (Chang'e 5 landing site).
+scene_seed: 7
+profile: {site: change5_site, rover: skid_steer_four_wheel}
+terrain:
+  backdrop: {enabled: false}             # a single NAC DTM cannot hold the 38.4 km backdrop; the 2 km regional tier
+                                          # reaches past the horizon seen from the camera (~1.6 km at 0.75 m height)
+spawn:
+  search_radius_m: 8.0                    # as Apollo 15/16: some seeds leave no safe spawn within 4 m of the centre

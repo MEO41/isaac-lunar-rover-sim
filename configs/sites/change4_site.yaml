@@ -1,0 +1,20 @@
+# Chang'e 4 landing site, Von Karman crater floor, far side (South Pole-Aitken basin; Yutu-2 rover).
+# DTM: LROC NAC DTM CHANGE4 (5 m/post, equirectangular, standard parallel -45.5 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/CHANGE4/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to Chang'e 4 lander at 177.5991 E, 45.4446 S
+# (ASSUMPTION: published position, approximate to a few metres), found with scripts/find_flat_site_origin.py:
+# 1.0 m from the target, 40 m box mean / max slope 1.14 / 2.57 deg, regional-tier DTM coverage 1.000.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: change4_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_CHANGE4.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_CHANGE4.TIF
+  origin_longitude_deg: 177.59915
+  origin_latitude_deg: -45.4446
+  standard_parallel_deg: -45.5
+  dem_cutoff_wavelength_m: 20.0
+terrain:
+  fractal:                                # the DTM does not resolve 4 m: measure the anchor at 2 posts, as the 2 m DTMs
+    structure_function_anchor_lag_m: 10.0
+    structure_function_anchor_valid_range_m: [0.182, 0.912]   # [0.08, 0.40] x (10 / 4)^0.9; lower bound 0.08: the
+    # Von Karman floor is smoother than the default range (measured 0.207 m at 10 m = 0.091 m at 4 m, 2026-11-17)

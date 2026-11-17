@@ -1,0 +1,19 @@
+# Marius Hills, Oceanus Procellarum (volcanic domes and cones).
+# DTM: LROC NAC DTM MARIUS (2 m/post, equirectangular, standard parallel 14.0 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/MARIUS/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to the DTM centre at 55.889 W, 13.705 N (target box: mean 28.16, max 42.72 deg: a
+# dome flank), found with scripts/find_flat_site_origin.py: 175.6 m from the target, 40 m box mean / max slope
+# 3.06 / 8.21 deg, regional-tier DTM coverage 1.000.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: marius_hills_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_MARIUS.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_MARIUS.TIF
+  origin_longitude_deg: -55.88538
+  origin_latitude_deg: 13.7096
+  standard_parallel_deg: 14.0
+  dem_cutoff_wavelength_m: 8.0
+terrain:
+  fractal:
+    structure_function_anchor_valid_range_m: [0.10, 0.70]   # upper bound 0.70: the near ring holds dome flanks
+    # (measured 0.641 m at 4 m, 2026-11-17); the default [0.10, 0.40] stops the bake

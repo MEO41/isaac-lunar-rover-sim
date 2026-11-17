@@ -2,6 +2,49 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-17 (evening): v1.0.8, nine non-Apollo sites (seven usable)
+
+Requested for the VLA layer's multi-site dataset (lunar-rover-vla branch `data-set-generation`: one dataset for
+offline training, the Shapley study and a public release, not only Apollo sites). Config plus one Isaac-free script;
+no simulator code change.
+- **Sites** (`configs/sites/<name>_site.yaml`, scenes `configs/scenes/<name>_area.yaml`): `change3` (Mare Imbrium),
+  `change4` (Von Karman, far side), `change5` (Oceanus Procellarum), `lunokhod2` (Le Monnier), `luna24` (Mare
+  Crisium), `surveyor7` (Tycho ejecta), `aristarchus_plateau`, `ina_caldera`, `marius_hills`. LROC NAC DTMs from the
+  PDS image archive (pds.lroc.im-ldi.com now redirects to pds.mcp.nasa.gov; S3 listing of
+  `lunar_reconnaissance_orbiter/pds4/lroc/lro-l-lroc-5-rdr/LROLRC_2001/DATA/SDP/NAC_DTM/`, 665 DTM folders), into
+  `NAC_DEM_DIRECTORY` (not in git). All equirectangular; polar DTMs (NOBILE, VIKRAMSITE1, MALAPERT) are polar
+  stereographic, which `EquirectangularSiteFrame` does not read, and were left out. Same DTM as fine and coarse
+  source, backdrop off, spawn search 8 m (as Apollo 11/15/16).
+- **Coarser DTMs**: Chang'e 3, Chang'e 4, Lunokhod 2 and Ina are 5 m/post, Chang'e 5 3 m/post. `dem_cutoff_wavelength_m`
+  = 4 posts (20 m, 12 m); the measured structure-function anchor is taken at 2 posts (10 m, 6 m) like the 2 m DTMs
+  (4 m), with the valid range scaled by (lag / 4 m)^0.9 (the anchor lag is used consistently by the fractal synthesis,
+  `terrain_builder.py`). Chang'e 4's 5 m DTM at 4 m lag gave 0.086 m (interpolation, below the 0.10 floor).
+  Measured anchors, 4 m-equivalent (m): Apollo 17 0.206, 11 0.163, 15 0.292, 16 0.313; Chang'e 3 0.397, Chang'e 4
+  0.091, Chang'e 5 0.227, Lunokhod 2 0.153, Luna 24 0.316, Aristarchus 0.214, Ina 0.514. Two sites lie outside
+  [0.10, 0.40] for geological reasons and get a site-specific range: Chang'e 4 [0.08, 0.40] (smooth basin floor),
+  Ina [0.10, 0.55] (mound field).
+- **Origins** (`scripts/find_flat_site_origin.py`, new): the post closest to a target (published lander position,
+  ASSUMPTION: approximate to a few metres, or the DTM centre) whose 40 m box has mean slope <= 3.5 and max <= 9 deg
+  (no rougher than the Apollo 17 LM patch: 3.29 / 8.51 deg with this script), complete near-ring DTM, and a bake crop
+  inside the raster. Check: the Apollo 15 origin gives 1.94 / 4.72 deg (logged by hand in v1.0.6: 1.9 / 4.7).
+  Distances from the target: Chang'e 3 2.6 m, Chang'e 4 1.0, Chang'e 5 5.0, Lunokhod 2 1.5, Luna 24 10.0,
+  Aristarchus 31, Ina 38 (the mounds are 14.5 / 36 deg), Marius Hills 176 (dome flank 28 / 43 deg), Surveyor 7 589 m
+  (the lander is ~0.5 km from the DTM edge; the bake crop must fit inside the raster).
+- **Spawn**: some seeds leave no safe spawn within 8 m (as Apollo 15 seeds 7-10): Chang'e 3 seeds 105, 114, 115 and
+  Luna 24 seed 109 (used: 116, 123). Ina (seeds 112, 117-133) and Marius Hills (113, 134-143) found none at all:
+  nearly every candidate is rejected for rocks, slope or craters (with 5 m DTMs the synthetic crater population
+  reaches 20 m diameters). Their configs are kept; both sites are not usable yet (open: a larger search radius, a
+  flatter origin over the whole near ring, or rock density tied to the site).
+- **Finding, not fixed**: `RoverDriveSession._wait_for_colliders` failed for Apollo 17 seed 101 (three starts, constant
+  max raycast error 0.0204 m after 60 s, RTX 5060): the probe rays only skip the rover, so a rock on a probe point
+  probably reads as a terrain error. Seed 124 starts normally.
+- **Checked** (old RTX 5060 machine, gpu_8gb, through the VLA layer's `collect_episodes.py` with this checkout via
+  `LUNAR_ROVER_SIM_REPOSITORY`, scripted expert, Sun 25 deg, masks recorded; collection `site_checks_v108_unreleased`):
+  goal reached on all 11 sites in 341-875 steps, no crater entry, nearest hazard 0.31-2.13 m: Apollo 17 s124 (341),
+  Apollo 11 s102 (367), Apollo 15 s103 (355), Apollo 16 s104 (495), Chang'e 3 s116 (565), Chang'e 4 s106 (370),
+  Chang'e 5 s107 (350), Lunokhod 2 s108 (875), Luna 24 s123 (356), Surveyor 7 s110 (428), Aristarchus s111 (401).
+  4.5-4.9 control steps/s with masks; 97-140 MB per episode. Bake 28-47 s per scene. Unit tests 22/22.
+
 ## 2026-11-17: v1.0.7, parallel Isaac processes on minsky
 
 User decision: the "one Isaac process at a time" rule came from the 8 GB RTX 5060; on minsky (RTX 5090, 32 GB) several

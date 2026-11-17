@@ -1,0 +1,19 @@
+# Chang'e 5 landing site, northern Oceanus Procellarum (youngest sampled mare basalt).
+# DTM: LROC NAC DTM CHANGE501 (3 m/post, equirectangular, standard parallel 43.0 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/CHANGE501/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to Chang'e 5 lander at 51.9161 W, 43.0576 N
+# (ASSUMPTION: published position, approximate to a few metres), found with scripts/find_flat_site_origin.py:
+# 5.0 m from the target, 40 m box mean / max slope 3.42 / 7.04 deg, regional-tier DTM coverage 1.000.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: change5_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_CHANGE501.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_CHANGE501.TIF
+  origin_longitude_deg: -51.91616
+  origin_latitude_deg: 43.05776
+  standard_parallel_deg: 43.0
+  dem_cutoff_wavelength_m: 12.0
+terrain:
+  fractal:                                # the DTM does not resolve 4 m: measure the anchor at 2 posts, as the 2 m DTMs
+    structure_function_anchor_lag_m: 6.0
+    structure_function_anchor_valid_range_m: [0.144, 0.576]   # [0.10, 0.40] x (6 / 4)^0.9

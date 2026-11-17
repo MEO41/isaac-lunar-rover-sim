@@ -1,0 +1,15 @@
+# Aristarchus plateau (pyroclastic deposits).
+# DTM: LROC NAC DTM ARISTPLAT1 (2 m/post, equirectangular, standard parallel 28.0 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/ARISTPLAT1/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to the DTM centre at 52.2512 W, 28.0075 N (target box: mean 6.19, max 14.83 deg)
+# (ASSUMPTION: published position, approximate to a few metres), found with scripts/find_flat_site_origin.py:
+# 31.0 m from the target, 40 m box mean / max slope 3.43 / 8.30 deg, regional-tier DTM coverage 1.000.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: aristarchus_plateau_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_ARISTPLAT1.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_ARISTPLAT1.TIF
+  origin_longitude_deg: -52.25039
+  origin_latitude_deg: 28.00677
+  standard_parallel_deg: 28.0
+  dem_cutoff_wavelength_m: 8.0

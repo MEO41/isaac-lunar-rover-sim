@@ -1,0 +1,19 @@
+# Luna 21 / Lunokhod 2 landing site, Le Monnier crater (mare-highland boundary).
+# DTM: LROC NAC DTM LUNOKHOD2 (5 m/post, equirectangular, standard parallel 26.0 deg from the PDS label),
+# PDS LROLRC_2001 DATA/SDP/NAC_DTM/LUNOKHOD2/ (pds.mcp.nasa.gov image archive; pds.lroc.im-ldi.com redirects there).
+# Origin: the flat patch closest to Luna 21 lander at 30.4076 E, 25.9994 N
+# (ASSUMPTION: published position, approximate to a few metres), found with scripts/find_flat_site_origin.py:
+# 1.5 m from the target, 40 m box mean / max slope 2.44 / 5.55 deg, regional-tier DTM coverage 0.839.
+# The same DTM is used as fine and coarse source. Cut-off wavelength = 4 posts.
+site:
+  name: lunokhod2_site
+  dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_LUNOKHOD2.TIF
+  dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_LUNOKHOD2.TIF
+  origin_longitude_deg: 30.40762
+  origin_latitude_deg: 25.99935
+  standard_parallel_deg: 26.0
+  dem_cutoff_wavelength_m: 20.0
+terrain:
+  fractal:                                # the DTM does not resolve 4 m: measure the anchor at 2 posts, as the 2 m DTMs
+    structure_function_anchor_lag_m: 10.0
+    structure_function_anchor_valid_range_m: [0.228, 0.912]   # [0.10, 0.40] x (10 / 4)^0.9
