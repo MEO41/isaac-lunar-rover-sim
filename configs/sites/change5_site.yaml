@@ -13,6 +13,7 @@ site:
   origin_latitude_deg: 43.05776
   standard_parallel_deg: 43.0
   dem_cutoff_wavelength_m: 12.0
+  dem_backdrop_path: ${NAC_DEM_DIRECTORY}/SLDEM2015_512_CHANGE5_SITE.TIF   # scripts/extract_backdrop_dem.py
 terrain:
   fractal:                                # the DTM does not resolve 4 m: measure the anchor at 2 posts, as the 2 m DTMs
     structure_function_anchor_lag_m: 6.0

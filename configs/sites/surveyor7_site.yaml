@@ -10,6 +10,7 @@ site:
   name: surveyor7_site
   dem_fine_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_SURVEYOR7.TIF
   dem_coarse_path: ${NAC_DEM_DIRECTORY}/NAC_DTM_SURVEYOR7.TIF
+  dem_backdrop_path: ${NAC_DEM_DIRECTORY}/SLDEM2015_512_SURVEYOR7_SITE.TIF   # scripts/extract_backdrop_dem.py
   origin_longitude_deg: -11.46373
   origin_latitude_deg: -40.97677
   standard_parallel_deg: -41.0

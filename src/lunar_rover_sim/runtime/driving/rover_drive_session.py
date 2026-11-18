@@ -58,6 +58,7 @@ class StartReport:
     rover_weight_n: float = 0.0
     wheel_normal_forces_n: list = field(default_factory=list)
     build_seconds: dict = field(default_factory=dict)
+    exposure_read_back: dict = field(default_factory=dict)      # tone mapping in effect after the stage was built
 
 
 class RoverDriveSession:
@@ -152,6 +153,8 @@ class RoverDriveSession:
                                         "orientation_xyzw": list(self.spawn_pose.orientation_xyzw),
                                         "heading_rad": self.spawn_pose.heading_rad}
         self.reset(clear_tracks=False)
+        from lunar_rover_sim.runtime.application import apply_render_settings
+        self.start_report.exposure_read_back = apply_render_settings(self.configuration)   # the new stage reset them
         return self.start_report
 
     def _wait_for_colliders(self) -> None:

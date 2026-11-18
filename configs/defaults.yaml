@@ -30,6 +30,9 @@ site:
   central_longitude_deg: 180.0
   body_radius_m: 1737400.0
   dem_cutoff_wavelength_m: 8.0            # ASSUMPTION: shortest wavelength the 2 m DTM resolves (~4 posts)
+  dem_backdrop_path: null                 # optional backdrop-tier DEM (else dem_coarse_path): an SLDEM2015 crop from
+  dem_backdrop_standard_parallel_deg: 0.0 #   scripts/extract_backdrop_dem.py; projection of that file
+  dem_backdrop_central_longitude_deg: 180.0
 
 terrain:
   workspace_size_m: 38.4
@@ -244,10 +247,13 @@ render:
     aperture_blades: 6                    # star with 12 points
     f_stop: 5.6
     spectral_samples: 0                   # > 0 adds spectral diffraction; it tints the whole frame, so off
-  exposure:                               # pinned tone mapping (Isaac Sim 6.0.1 defaults, written explicitly at start-up)
-    auto_exposure: false                  # histogram auto exposure off: brightness follows the Sun intensity
-    tonemap_operator: 6                   # RTX tonemapper op 6 (default)
-    film_iso: 100.0
+  exposure:                               # pinned tone mapping, written at start-up and again once the stage exists
+    auto_exposure: false                  # histogram auto exposure off: frames are a function of the scenario
+    tonemap_operator: 1                   # v1.0.9: 1 = linear radiance + sRGB (a linear sensor); was 6 (ACES filmic)
+    film_iso: 100.0                       # at the metering reference elevation
+    rule: sun_elevation                   # fixed | sun_elevation: ISO x sin(reference) / sin(Sun elevation)
+    reference_elevation_deg: 25.0
+    minimum_elevation_deg: 5.0            # the gain stops growing below this Sun elevation
     camera_shutter: 50.0                  # 1/50 s
     f_number: 5.0
     exposure_compensation: 0.0

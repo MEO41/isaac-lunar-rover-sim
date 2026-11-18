@@ -65,6 +65,8 @@ How it is wired:
 
 - **Terrain from LROC NAC DTMs** (Apollo 17, 2 m + 5 m mosaic) in a true-metre local frame, nested tiers out to the
   horizon (2.5 cm workspace, 0.2 m near ring, 4 m regional, 64 m backdrop) with exact triangle-mesh colliders.
+  The other sites take their backdrop (102.4 km at 128 m) from an SLDEM2015 crop (LOLA + SELENE TC, ~59 m;
+  `scripts/extract_backdrop_dem.py`, once per machine), so distant massifs and crater rims stand on the horizon.
 - **Procedural sub-DEM relief** (SYNTHETIC): equilibrium crater population with diffusion degradation and
   band-limited fractal relief, calibrated to the DEM's own roughness; the DEM's resolved band is left untouched.
 - **Rocks** (SYNTHETIC): procedural fractured-ellipsoid shapes, blended background + boulder-tail size-frequency law,
@@ -75,6 +77,9 @@ How it is wired:
   the soil maps, plus a track mask that changes albedo and smoothness. Ruts are visual; the collider is not deformed.
 - **Rover**: procedural 55 kg four-wheel skid-steer with a passive front-axle pivot, closed-loop yaw rate, cameras,
   lunar gravity, camera glare (bloom) for the Sun.
+- **Camera** (v1.0.9): linear sensor response (RTX tone-map operator 1, then sRGB) with an exposure metered to the
+  Sun (film ISO x sin(25 deg) / sin(Sun elevation); ASSUMPTION: a deterministic model of auto exposure), glare on
+  the Sun only (`render.exposure`, `render.sun_glare`; checks: `scripts/render_camera_model_comparison.py`).
 - **Scripted expert** (privileged demonstrator, planner design after
   [MARE](https://github.com/raulcastar/GNC-Moon-Simulator)'s GNC stack): fast-marching route on a slope cost map with
   rocks taller than 0.10 m and large crater bowls impassable, a dynamic-window local planner that refuses footprint
@@ -95,6 +100,8 @@ Linux, an NVIDIA RTX GPU (verified on an 8 GB RTX 5060), Isaac Sim 6.0.1 pip ins
 cp .env.example .env.local && $EDITOR .env.local      # ISAAC_ENV, data root on a large disk, DEM directory
 scripts/setup_data_root.sh                            # creates the data root (refuses the root disk)
 $ISAAC_ENV/bin/python scripts/bake_scene.py --preset gpu_8gb     # Isaac-free bake (~40 s) -> <data root>/scenes/
+python3 scripts/extract_backdrop_dem.py --all                     # SLDEM2015 backdrops for the non-Apollo-17 sites
+                                                                  # (range requests, ~3-5 min per site, ~20 MB each)
 ```
 
 ## Run
@@ -105,6 +112,8 @@ scripts/isaac_run.sh scripts/render_drive_video.py --preset gpu_8gb         # ch
 scripts/isaac_run.sh tests/isaac/smoke_terrain_drive.py --preset gpu_8gb    # terrain, colliders, rocks, wheels follow ground
 scripts/isaac_run.sh tests/isaac/smoke_wheel_tracks.py --preset gpu_8gb     # tracks visible in renders
 scripts/isaac_run.sh scripts/render_sun_glare_check.py                      # camera glare comparison PNG
+scripts/isaac_run.sh scripts/render_horizon_check.py --scene change5_area --label x   # horizon all around the spawn
+scripts/isaac_run.sh scripts/render_shadow_contrast_check.py --scene change5_area   # shadow vs sunlit radiance
 $ISAAC_ENV/bin/python scripts/plan_expert_routes.py --preset gpu_8gb        # expert routes on the cost map (no Isaac)
 scripts/isaac_run.sh tests/isaac/smoke_scripted_expert.py --preset gpu_8gb  # expert drives the PhysX rover to goals
 scripts/isaac_run.sh tests/isaac/check_ground_truth_masks.py --preset gpu_8gb  # masks vs the renderer's depth/semantics

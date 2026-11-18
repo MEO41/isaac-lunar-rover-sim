@@ -39,6 +39,10 @@ class LoadedScene:
 
 
 BAKED_SECTIONS = ("generator_version", "scene_seed", "site", "terrain", "rocks", "regolith")
+# Site fields added after scenes were already baked, with the value that reproduces those scenes (v1.0.9: no separate
+# backdrop DEM). A scene baked before the field existed loads with this value; its bake hash is unchanged.
+LATER_SITE_FIELDS = {"dem_backdrop_path": None, "dem_backdrop_standard_parallel_deg": 0.0,
+                     "dem_backdrop_central_longitude_deg": 180.0}
 
 
 def load_scene(directory: str | Path, runtime_configuration: SimulatorConfiguration | None = None) -> LoadedScene:
@@ -59,6 +63,8 @@ def load_scene(directory: str | Path, runtime_configuration: SimulatorConfigurat
     merged = runtime_configuration.model_dump(mode="json")
     for section in BAKED_SECTIONS:
         merged[section] = baked[section]
+    for key, value in LATER_SITE_FIELDS.items():
+        merged["site"].setdefault(key, value)
     configuration = SimulatorConfiguration.model_validate(merged)
     layout = build_tier_layout(configuration.terrain)
     with np.load(directory / "terrain.npz") as archive:

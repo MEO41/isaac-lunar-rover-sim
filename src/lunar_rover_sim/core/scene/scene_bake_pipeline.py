@@ -167,7 +167,9 @@ def bake_scene(configuration: SimulatorConfiguration, data_root: DataRoot, overw
                  "origin_latitude_deg": configuration.site.origin_latitude_deg,
                  "height_datum_m": terrain.height_datum_m,
                  "dem_fine_file": Path(configuration.site.dem_fine_path).name,
-                 "dem_coarse_file": Path(configuration.site.dem_coarse_path).name},
+                 "dem_coarse_file": Path(configuration.site.dem_coarse_path).name,
+                 "dem_backdrop_file": (Path(configuration.site.dem_backdrop_path).name
+                                       if configuration.site.dem_backdrop_path else None)},
         "frames": "x east, y north, z up, metres; z = 0 at the bicubic DEM height of the origin; quaternions xyzw",
         "synthetic_notice": SYNTHETIC_NOTICE,
         "layout": {

@@ -123,6 +123,9 @@ def _strip_machine_paths(value: Any) -> Any:
 def bake_hash(configuration: SimulatorConfiguration) -> str:
     """First 6 hex digits of the SHA-256 of everything a baked scene depends on (site, terrain, rocks, regolith, seed)."""
     dumped = configuration.model_dump(mode="json")
+    if dumped["site"]["dem_backdrop_path"] is None:             # v1.0.9 fields: unused, older hashes stay as they were
+        for key in ("dem_backdrop_path", "dem_backdrop_standard_parallel_deg", "dem_backdrop_central_longitude_deg"):
+            dumped["site"].pop(key)
     hashed = {section: _strip_machine_paths(dumped[section]) for section in BAKE_HASH_SECTIONS}
     hashed["scene_seed"] = configuration.scene_seed
     hashed["generator_version"] = configuration.generator_version

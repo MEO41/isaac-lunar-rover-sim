@@ -52,6 +52,12 @@ class SiteConfiguration(StrictModel):
     central_longitude_deg: float
     body_radius_m: float
     dem_cutoff_wavelength_m: float
+    # Optional separate DEM for the backdrop tier (else dem_coarse_path), with its own equirectangular projection;
+    # e.g. an SLDEM2015 crop from scripts/extract_backdrop_dem.py (standard parallel 0, central longitude 180). Its
+    # heights are shifted to the regional tier by the median difference where both exist (terrain_builder).
+    dem_backdrop_path: str | None
+    dem_backdrop_standard_parallel_deg: float
+    dem_backdrop_central_longitude_deg: float
 
 
 class NearRingConfiguration(StrictModel):
@@ -377,15 +383,20 @@ class SunGlareConfiguration(StrictModel):
 
 
 class ExposureConfiguration(StrictModel):
-    """Pinned camera exposure and tone mapping (RTX /rtx/post/tonemap and /rtx/post/histogram).
+    """Pinned camera exposure and tone mapping (RTX /rtx/post/tonemap and /rtx/post/histogram) and the exposure rule.
 
-    Values are the Isaac Sim 6.0.1 defaults read back on 2026-11-16, written explicitly at start-up so that a
-    different default cannot change image brightness. With auto exposure off, frame brightness follows the Sun
-    intensity (measured: mean luminance 0.469, 0.333, 0.193 at 1, 0.5, 0.25 x intensity)."""
+    Up to v1.0.8 the values were the Isaac Sim 6.0.1 defaults (ACES operator 6, ISO 100); writing them at start-up had
+    no effect because a new stage resets them, which went unnoticed while they equalled the defaults (fixed in
+    v1.0.9: ``apply_render_settings`` runs again after the stage exists). v1.0.9: operator 1 (linear + sRGB) and
+    ``rule`` sun_elevation (``metered_film_iso``: ISO follows 1 / sin(Sun elevation) from ``reference_elevation_deg``,
+    applied by ``set_sun_direction``)."""
 
     auto_exposure: bool
     tonemap_operator: int
     film_iso: float
+    rule: Literal["fixed", "sun_elevation"]
+    reference_elevation_deg: float
+    minimum_elevation_deg: float
     camera_shutter: float
     f_number: float
     exposure_compensation: float

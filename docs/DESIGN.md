@@ -2205,7 +2205,7 @@ Nothing in this section is built, imported or required by version 1. Each item n
 - Geometry carries wavelengths down to 0.2 m; finer relief is shading only, with uncalibrated amplitude. The collider and the rendered surface differ by a few millimetres by design.
 - Tracks exist only inside the workspace. The regional and backdrop tiers have no collider; the boundary policy and the fall-through guard keep the rover away from them.
 - The workspace and near ring are planar; only the far tiers carry the Moon's curvature.
-- Exposure is controlled through Sun intensity with default RTX tonemapping; images are not radiometrically calibrated.
+- Exposure is controlled through Sun intensity with default RTX tonemapping; images are not radiometrically calibrated. (v1.0.9: the RTX tone-map keys are verified and used: linear operator 1, ISO metered to the Sun elevation; see docs/decision_log.md 2026-11-18.)
 - The `gpu_32gb` preset is extrapolated and has not been run.
 - Throughput numbers for the full loop are estimates until smoke test S7 runs. In the window, simulated speed is the frame rate divided by 60.
 

@@ -26,6 +26,26 @@ def blend_into_outer(inner_grid: RegularGrid, inner_full_m: np.ndarray, outer_gr
     return outer_at_inner + edge_weight(inner_grid, skirt_m) * (inner_full_m - outer_at_inner)
 
 
+def vertical_offset_to_inner(outer_grid: RegularGrid, outer_m: np.ndarray, inner_grid: RegularGrid,
+                             inner_m: np.ndarray, inner_margin_m: float) -> dict:
+    """Median height difference inner - outer at the outer lattice points lying inside the inner tier.
+
+    Points closer than ``inner_margin_m`` to the inner border (its blending skirt) are left out. Used to put a backdrop
+    from another DEM (SLDEM2015, ~59 m) on the regional tier's NAC DTM heights. Returns offset_m (add to outer),
+    the median absolute deviation of the differences after the shift, and the number of points."""
+    east, north = outer_grid.coordinate_mesh()
+    inside = ((east >= inner_grid.origin_east_m + inner_margin_m) & (east <= inner_grid.maximum_east_m - inner_margin_m)
+              & (north >= inner_grid.origin_north_m + inner_margin_m)
+              & (north <= inner_grid.maximum_north_m - inner_margin_m))
+    if not inside.any():
+        raise ValueError("no outer lattice point lies inside the inner tier; cannot measure the vertical offset")
+    inner_at_outer, valid = triangulated_height(inner_m, inner_grid, east[inside], north[inside])
+    differences = inner_at_outer[valid] - outer_m[inside][valid]
+    offset = float(np.median(differences))
+    return {"offset_m": offset, "median_absolute_deviation_m": float(np.median(np.abs(differences - offset))),
+            "point_count": int(differences.size)}
+
+
 def cells_outside_inner(outer_grid: RegularGrid, inner_grid: RegularGrid) -> np.ndarray:
     """Cell mask (count_north-1, count_east-1) of the outer tier: True where the cell is NOT covered by the inner tier."""
     tolerance = 1e-6 * outer_grid.spacing_m

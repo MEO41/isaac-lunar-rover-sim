@@ -207,13 +207,16 @@ def set_sun_direction(stage, azimuth_deg: float, elevation_deg: float) -> np.nda
     """Re-pose the Sun (also at runtime): azimuth = compass bearing towards the Sun, elevation above the horizon.
 
     Returns the unit vector towards the Sun read back from the stage. Raises ValueError for an elevation outside
-    [-90, 90] (no clamping). The ground-truth mask renderer reads the same direction from the stage."""
+    [-90, 90] (no clamping). The ground-truth mask renderer reads the same direction from the stage. Also meters the
+    camera exposure for the new elevation (``application.meter_exposure_for_sun``, render.exposure.rule)."""
     if not -90.0 <= elevation_deg <= 90.0:
         raise ValueError(f"sun elevation {elevation_deg} deg is outside [-90, 90]")
     xformable = UsdGeom.Xformable(stage.GetPrimAtPath(SUN_PATH))
     xformable.ClearXformOpOrder()
     xformable.AddRotateZOp().Set(float(90.0 - azimuth_deg))
     xformable.AddRotateYOp().Set(float(90.0 - elevation_deg))
+    from lunar_rover_sim.runtime.application import meter_exposure_for_sun
+    meter_exposure_for_sun(elevation_deg)                 # exposure rule (render.exposure.rule) follows the Sun
     return sun_direction_from_stage(stage)
 
 

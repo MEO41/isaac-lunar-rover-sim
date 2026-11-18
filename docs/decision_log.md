@@ -2,6 +2,79 @@
 
 Deviations from `docs/DESIGN.md` and additions made while building, newest first.
 
+## 2026-11-18: v1.0.9, realism pass 1: SLDEM2015 backdrops, a linear camera metered to the Sun, settings fix
+
+Requested for the VLA layer's dataset (lunar-rover-vla, branch `data-set-generation`): a short, targeted realism pass,
+checked against real images, frozen in a release before the large recording. Apollo surface photos (LPI Apollo
+Image Atlas browse scans, NASA, 64 frames of Apollo 11, 15, 16, 17) and the v1.0.8 multi-site renders were compared.
+- **Backdrop from SLDEM2015.** 11 of 12 sites had no backdrop (a single NAC DTM is 4-25 km wide): the terrain ended
+  at the 2 km regional tier and the horizon was an empty edge, while the Apollo photos show massifs and crater rims
+  tens of km away. New optional site fields `dem_backdrop_path`, `dem_backdrop_standard_parallel_deg`,
+  `dem_backdrop_central_longitude_deg` (defaults: none, 0, 180) let the backdrop tier read its own DEM in its own
+  projection; `terrain_builder` shifts it onto the regional tier by the median height difference at the backdrop
+  posts inside the regional tier (skirt excluded; `tier_blending.vertical_offset_to_inner`, reported in the bake's
+  `dem_report.backdrop.alignment_to_regional`). ASSUMPTION: a constant offset (no tilt) is enough between the two
+  DEMs. Source: SLDEM2015 512 ppd float tiles (LOLA + SELENE TC, ~59 m, heights relative to 1737.4 km);
+  `scripts/extract_backdrop_dem.py` (new) reads only the needed bytes with HTTP range requests (~1 900 requests of
+  ~10 KB per site, 2.5-5 min, ~20 MB file; stitches tiles across the equator and 180 deg: Apollo 11, Chang'e 4) and
+  writes an uncompressed float32 GeoTIFF the memmap reader opens (`core/dem/sldem_tiles.py`, new). Scenes of the 11
+  sites: backdrop on, 102.4 km at 128 m (relief out to 51 km; the camera's own horizon is ~1.6 km away). Apollo 17
+  keeps its NAC 5 m mosaic backdrop (38.4 km at 64 m), unchanged.
+- **Agreement** (SLDEM - NAC fine DTM at the origin, from the extractor; bake shift and its median absolute
+  deviation over 225 posts): Apollo 11 -4.1 m / bake -1.14 (MAD 1.66), Apollo 15 -1.3 / +3.42
+  (1.36), Apollo 16 +2.1 / -0.97 (1.42), Aristarchus -0.0 / -1.03 (1.57), Chang'e 3 +1.6 / +1.37 (1.63), Chang'e 4
+  -1.9 / -1.30 (2.07), Chang'e 5 -0.9 / +3.97 (2.08), Lunokhod 2 -0.2 / -0.90 (1.90), Luna 24 -1.4 / +1.86 (1.91),
+  Surveyor 7 +5.1 / -0.12 (1.64); Ina -7.4 and Marius Hills -6.5 m (extracted, not baked: no spawn yet). Scene seeds
+  of the VLA sample collection; all 9 usable sites baked (27-47 s each).
+- **Skyline check** (SLDEM only, highest elevation angle seen from 0.75 m per 45 deg heading, curvature included):
+  Apollo 15 up to +13.6 deg at 10-26 km (exists only with the backdrop); Surveyor 7 +3.4 to +6.6 deg from rises
+  within 1.5 km (inside the regional tier; Tycho's rim does not rise above them, so its renders barely change, as
+  rendered); Chang'e 5 within +-0.8 deg (flat).
+- **Effect**: Apollo 15 seed 103, level views all around the spawn (`scripts/render_horizon_check.py`, new): without
+  the backdrop a flat empty horizon; with it the massif to the south (Hadley Delta's direction) and the range to the
+  north-east stand on the horizon, as in AS15-82-11120 / 11180 (`docs/images/backdrop_horizon_apollo15.png`).
+  Chang'e 5 (mare plain): a low distant rise only; median horizon row unchanged within 3 px.
+- **Bake hash**: unused new fields are left out of the hash, so every scene without `dem_backdrop_path` keeps its
+  identifier (Apollo 17 s124 is still `9408c8`, unit test); scenes baked before the fields existed load with their
+  defaults (`scene_loader.LATER_SITE_FIELDS`; without it v1.0.8 scenes failed validation). The 11 sites get new
+  hashes (Chang'e 5 s107 `0bca04` -> `2deacd`, Apollo 15 s103 `a8647c` -> `1a5509`); rocks and craters are identical.
+- **Shadows: measured** (`scripts/render_shadow_contrast_check.py`, new; Chang'e 5 s107, front-camera pose, 4
+  headings, ray-cast shadow labels): linear HDR radiance of cast shadow / sunlit ground 0.002-0.023 at Sun 10 deg and
+  0.017-0.076 at 25 deg (bounce light from nearby sunlit ground and rocks; physically plausible for an open plain).
+  In the v1.0.8 8-bit frames the same pixels are 0-1 of 255 at Sun 10 deg (sunlit 48-72) and 2-13 at 25 deg (sunlit
+  119-132): the ACES tone curve and the fixed exposure crush them, while real cameras keep detail in shadow. Also
+  measured: attaching the `HdrColor` annotator darkens the same render product's 8-bit `rgb` ~5x (Isaac Sim 6.0.1),
+  so the check reports HDR and 8-bit statistics from separate runs.
+- **Bug: the pinned exposure never took effect.** `start_simulation_application` wrote the tone-map settings, but the
+  new stage of `RoverDriveSession.start` (`context.new_stage()`) loads the renderer defaults: configured operator 1 /
+  film ISO 400 read back as 6 / 100 after the session start (`scripts/probe_tone_settings.py`, new). It went unnoticed
+  because the pinned values were the defaults, so recorded data (v1.0.8 and earlier) is labelled correctly (its
+  provenance reads the values back after the start). Fix: `apply_render_settings` (anti-aliasing, cutout opacity,
+  glare, exposure) runs at application start and again at the end of `RoverDriveSession.start`; read back after the
+  start and after an episode reset: as configured. `StartReport.exposure_read_back` records it.
+- **Camera model changed (user decision 2026-11-18)**: tone-map operator 1 (linear radiance, then sRGB: the 8-bit
+  values match the measured HDR ratios through the sRGB curve, e.g. ratio 0.076 at sunlit 103 predicts 26, rendered 24)
+  and exposure rule `sun_elevation`: film ISO = 100 x sin(25 deg) / sin(Sun elevation), gain frozen below 5 deg
+  (`core/perception/camera_exposure.py`; applied by `set_sun_direction`, so every caller that moves the Sun, the VLA
+  environment included, gets it). ASSUMPTION: a model of auto exposure that meters flat-ground irradiance only, so
+  frames stay a deterministic function of the scenario. Effect, Chang'e 5 view
+  (`scripts/render_camera_model_comparison.py`, new; median sunlit / cast shadow at Sun 10, 25, 40 deg): ACES fixed 53 / 0, 118 / 7, 124 / 18; linear fixed 59 / 0,
+  102 / 18, 107 / 33; linear metered 91 / 1, 102 / 18, 88 / 27; no clipped ground pixel in any. At Sun 10 deg shadows
+  stay black in every model (0.2-2 % of sunlit; the low-Sun Apollo 11 photos show the same). VLA episodes, Apollo 15
+  s103 at Sun 10 / 25 / 40 deg (lower-frame medians): v1.0.8 sunlit 90 / 150 / 181, shadow 0 / 2 / 9; v1.0.9 sunlit
+  130 / 125 / 125, shadow 3 / 3 / 7, ISO 243 / 100 / 66. Consequence for the VLA layer: overall frame brightness no
+  longer encodes the Sun elevation (shadow length and contrast still do); v1.0.8 and v1.0.9 frames are not
+  interchangeable.
+- **End to end** (VLA layer, this checkout via `LUNAR_ROVER_SIM_REPOSITORY`, check collection
+  `realism_checks_unreleased`, RTX 5060): Apollo 15 s103 `1a5509`, one expert episode with masks, Sun 25 deg: goal
+  reached in 355 steps, 4.46 control steps/s (a one-episode v1.0.8 run: 4.45; start-up included). The 102.4 km
+  backdrop costs no measurable throughput and fits the 8 GB preset.
+- **Not a gap**: the white dots in the sky of some renders are the Sun disc (0.53 deg); projecting the recorded Sun
+  direction into the camera lands within 2-3 px of them.
+- Unit tests 35/35 (13 new: tile names, byte plan across four tiles, window georeferencing, refused windows, GeoTIFF
+  round trip, vertical offset, unchanged hash, pixel size; fixed / metered ISO, minimum elevation, refused rules,
+  camera defaults).
+
 ## 2026-11-17 (evening): v1.0.8, nine non-Apollo sites (seven usable)
 
 Requested for the VLA layer's multi-site dataset (lunar-rover-vla branch `data-set-generation`: one dataset for

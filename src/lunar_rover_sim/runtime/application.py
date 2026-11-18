@@ -70,13 +70,24 @@ def start_simulation_application(configuration, headless: bool = True, width: in
     application = SimulationApp({"headless": headless, "width": width, "height": height,
                                  "renderer": configuration.render.renderer, "anti_aliasing": 0})
     import carb
+    carb.settings.get_settings().set("/log/channels/omni.physx.plugin", "error")
+    apply_render_settings(configuration)
+    return application, data_root
+
+
+def apply_render_settings(configuration) -> dict:
+    """Write every render setting this project pins (anti-aliasing, cutout opacity, glare, exposure).
+
+    Called at application start and again by ``RoverDriveSession.start`` once its new stage exists: a new Kit stage
+    loads the renderer's default settings. Before 2026-11-18 the start-up values were silently undone there (measured:
+    configured tone-map operator 1 / film ISO 400 read back as 6 / 100 after the session start); they only seemed to
+    hold because the pinned values equal Isaac Sim 6.0.1's defaults. Returns the exposure values read back."""
+    import carb
     settings = carb.settings.get_settings()
     settings.set("/rtx/post/aa/op", int(configuration.render.anti_aliasing_mode))
-    settings.set("/log/channels/omni.physx.plugin", "error")
     settings.set("/rtx/raytracing/fractionalCutoutOpacity", False)
     apply_sun_glare(configuration.render.sun_glare)
-    apply_exposure(configuration.render.exposure)
-    return application, data_root
+    return apply_exposure(configuration.render.exposure)
 
 
 EXPOSURE_SETTINGS = {
@@ -87,13 +98,25 @@ EXPOSURE_SETTINGS = {
 }
 
 
+_ACTIVE_EXPOSURE = None          # the exposure configuration written last (the Sun-elevation rule needs it)
+_CURRENT_SUN_ELEVATION_DEG = None  # the Sun elevation set last by set_sun_direction (None before any)
+
+
 def apply_exposure(exposure) -> dict:
-    """Write the pinned exposure / tone-mapping settings; returns the values read back (raises if one did not stick)."""
+    """Write the pinned exposure / tone-mapping settings; returns the values read back (raises if one did not stick).
+
+    The film ISO is the one ``exposure.rule`` gives for the current Sun elevation (``meter_exposure_for_sun``)."""
     import carb
+    from lunar_rover_sim.core.perception.camera_exposure import metered_film_iso
+    global _ACTIVE_EXPOSURE
+    _ACTIVE_EXPOSURE = exposure
     settings = carb.settings.get_settings()
     read_back = {}
     for name, path in EXPOSURE_SETTINGS.items():
         value = getattr(exposure, name)
+        if name == "film_iso":
+            value = metered_film_iso(exposure.film_iso, exposure.rule, _CURRENT_SUN_ELEVATION_DEG,
+                                     exposure.reference_elevation_deg, exposure.minimum_elevation_deg)
         settings.set(path, value)
         read_back[name] = settings.get(path)
         if isinstance(value, bool) and bool(read_back[name]) != value or \
@@ -102,11 +125,33 @@ def apply_exposure(exposure) -> dict:
     return read_back
 
 
+def meter_exposure_for_sun(sun_elevation_deg: float) -> float | None:
+    """Record the Sun elevation and, under the sun_elevation rule, write the matching film ISO; returns it (or None).
+
+    Called by ``set_sun_direction``; does nothing before ``apply_exposure`` ran (Isaac-free tools, unit tests)."""
+    global _CURRENT_SUN_ELEVATION_DEG
+    _CURRENT_SUN_ELEVATION_DEG = float(sun_elevation_deg)
+    if _ACTIVE_EXPOSURE is None:
+        return None
+    import carb
+    from lunar_rover_sim.core.perception.camera_exposure import metered_film_iso
+    exposure = _ACTIVE_EXPOSURE
+    film_iso = metered_film_iso(exposure.film_iso, exposure.rule, _CURRENT_SUN_ELEVATION_DEG,
+                                exposure.reference_elevation_deg, exposure.minimum_elevation_deg)
+    carb.settings.get_settings().set(EXPOSURE_SETTINGS["film_iso"], film_iso)
+    return film_iso
+
+
 def exposure_snapshot() -> dict:
     """Current exposure / tone-mapping settings (for run metadata)."""
     import carb
     settings = carb.settings.get_settings()
-    return {name: settings.get(path) for name, path in EXPOSURE_SETTINGS.items()}
+    snapshot = {name: settings.get(path) for name, path in EXPOSURE_SETTINGS.items()}
+    if _ACTIVE_EXPOSURE is not None:
+        snapshot.update(rule=_ACTIVE_EXPOSURE.rule, reference_elevation_deg=_ACTIVE_EXPOSURE.reference_elevation_deg,
+                        minimum_elevation_deg=_ACTIVE_EXPOSURE.minimum_elevation_deg,
+                        base_film_iso=_ACTIVE_EXPOSURE.film_iso, sun_elevation_deg=_CURRENT_SUN_ELEVATION_DEG)
+    return snapshot
 
 
 def apply_sun_glare(glare) -> None:

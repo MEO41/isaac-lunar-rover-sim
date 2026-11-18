@@ -6,6 +6,7 @@ DEM-only workspace heights and the final heights so the two can always be compar
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from scipy import ndimage
@@ -22,7 +23,7 @@ from lunar_rover_sim.core.terrain.crater_stamping import stamp_craters
 from lunar_rover_sim.core.terrain.spectral_fields import gaussian_lowpass_fft, synthesize_band_limited_fractal
 from lunar_rover_sim.core.terrain.terrain_statistics import (plane_detrend, root_mean_square_slope_deg,
                                                              structure_function)
-from lunar_rover_sim.core.terrain.tier_blending import blend_into_outer, cells_outside_inner
+from lunar_rover_sim.core.terrain.tier_blending import blend_into_outer, cells_outside_inner, vertical_offset_to_inner
 
 
 @dataclass
@@ -94,8 +95,22 @@ def build_terrain(configuration: SimulatorConfiguration, log=print) -> TerrainBu
     if layout.regional_grid is not None:
         regional_height, dem_report["regional"] = sampler.sample(layout.regional_grid)
     if layout.backdrop_grid is not None:
-        backdrop_height, dem_report["backdrop"] = sample_backdrop(coarse_raster, frame, layout.backdrop_grid,
-                                                                  sampler.height_datum_m)
+        backdrop_raster, backdrop_frame = coarse_raster, frame
+        if site.dem_backdrop_path:                                # separate backdrop DEM in its own projection
+            backdrop_raster = open_height_raster(site.dem_backdrop_path)
+            backdrop_frame = EquirectangularSiteFrame(site.origin_longitude_deg, site.origin_latitude_deg,
+                                                      site.dem_backdrop_standard_parallel_deg,
+                                                      site.dem_backdrop_central_longitude_deg, site.body_radius_m)
+        backdrop_height, dem_report["backdrop"] = sample_backdrop(backdrop_raster, backdrop_frame,
+                                                                  layout.backdrop_grid, sampler.height_datum_m)
+        if site.dem_backdrop_path and regional_height is not None:
+            alignment = vertical_offset_to_inner(layout.backdrop_grid, backdrop_height, layout.regional_grid,
+                                                 regional_height, layout.regional_skirt_m)
+            backdrop_height = backdrop_height + alignment["offset_m"]
+            dem_report["backdrop"]["alignment_to_regional"] = alignment
+            log(f"[terrain] backdrop DEM {Path(site.dem_backdrop_path).name} shifted {alignment['offset_m']:+.2f} m "
+                f"onto the regional tier (MAD {alignment['median_absolute_deviation_m']:.2f} m, "
+                f"{alignment['point_count']} points)", flush=True)
     log(f"[terrain] DEM sampled; datum {sampler.height_datum_m:.3f} m", flush=True)
 
     if fractal.structure_function_anchor_source == "measured_from_dem":
