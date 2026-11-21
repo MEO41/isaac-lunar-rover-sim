@@ -126,3 +126,8 @@ Presets: `smoke` (small, fast), `gpu_8gb` (default), `gpu_32gb` (RTX 5090; extra
 
 All sub-DEM detail, rocks and soil properties are synthetic and uncalibrated. Wheels do not physically sink into
 their ruts. Skid steering scrubs heavily, so yaw rate is closed-loop while forward speed in arcs is open-loop.
+
+## License
+
+The code in this repository uses the [MIT License](LICENSE). The git submodule `external/lunar_regolith` is a separate
+repository. This license does not cover it.
